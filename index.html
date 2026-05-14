@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#4A90D9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="每日思绪">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💭</text></svg>">
+  <title>每日思绪</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header>
+      <h1>📝 每日思绪</h1>
+      <div class="header-actions">
+        <button id="historyBtn" title="历史记录">📋</button>
+        <button id="settingsBtn" title="设置">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+      <!-- Chat View -->
+      <div id="chatView" class="view active">
+        <div id="messages"></div>
+        <div id="summaryBanner" style="display:none"></div>
+      </div>
+
+      <!-- History View -->
+      <div id="historyView" class="view">
+        <div class="history-header">
+          <button id="backBtn" title="返回今天">←</button>
+          <h2>📋 历史记录</h2>
+        </div>
+        <div id="historyList"></div>
+      </div>
+    </main>
+
+    <!-- Input Area -->
+    <footer id="inputFooter">
+      <button id="voiceBtn" title="语音输入">🎤</button>
+      <input type="text" id="messageInput" placeholder="说说你的想法..." autocomplete="off">
+      <button id="sendBtn" title="发送">→</button>
+    </footer>
+  </div>
+
+  <!-- Settings Dialog -->
+  <div id="settingsDialog" class="modal">
+    <div class="modal-content">
+      <h2>⚙️ 设置</h2>
+      <label for="apiKeyInput">DeepSeek API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="输入你的 DeepSeek API Key">
+      <p class="hint">
+        在 <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a> 注册获取
+      </p>
+      <button id="saveSettings">保存</button>
+    </div>
+  </div>
+
+  <script src="js/db.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/summary.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
