@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#7c3aed">
+  <title>剧本提示词生成器</title>
+  <style>
+    :root {
+      --bg: #0f0f1a;
+      --surface: #1a1a2e;
+      --card: #16213e;
+      --text: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --primary: #7c3aed;
+      --primary-light: #a78bfa;
+      --border: #2a2a4a;
+      --success: #10b981;
+      --radius: 12px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC", "Segoe UI", sans-serif;
+      font-size: 15px;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh; height: 100dvh;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* ===== Header ===== */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 17px; font-weight: 600; }
+    header button {
+      background: none; border: none; color: var(--text-secondary); font-size: 16px;
+      cursor: pointer; padding: 4px 8px; border-radius: 8px;
+    }
+    header button:active { background: var(--border); }
+
+    /* ===== Main ===== */
+    main { flex: 1; overflow-y: auto; padding: 16px; }
+
+    /* ===== Tabs ===== */
+    .tabs {
+      display: flex; gap: 0; margin-bottom: 16px; background: var(--surface);
+      border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+    }
+    .tab-btn {
+      flex: 1; padding: 10px; text-align: center; border: none; background: transparent;
+      color: var(--text-secondary); font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { background: var(--primary); color: #fff; }
+    .tab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ===== Form ===== */
+    label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+    textarea, input, select {
+      width: 100%; padding: 12px 14px; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 14px; outline: none;
+      background: var(--surface); color: var(--text); font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    textarea:focus, input:focus, select:focus { border-color: var(--primary); }
+    textarea { resize: vertical; min-height: 160px; line-height: 1.6; }
+    .form-group { margin-bottom: 16px; }
+
+    .style-row {
+      display: flex; gap: 8px;
+    }
+    .style-row input { flex: 1; }
+    .style-presets {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+    }
+    .style-presets button {
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 16px;
+      background: var(--surface); color: var(--text-secondary); font-size: 12px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .style-presets button:active, .style-presets button.selected {
+      background: var(--primary); color: #fff; border-color: var(--primary);
+    }
+
+    .btn-primary {
+      width: 100%; padding: 14px; border: none; border-radius: 10px;
+      background: var(--primary); color: #fff; font-size: 16px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn-primary:active { opacity: 0.8; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ===== Results ===== */
+    .prompt-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+    }
+    .prompt-card .scene-title {
+      font-size: 14px; font-weight: 600; color: var(--primary-light); margin-bottom: 8px;
+    }
+    .prompt-card .elements {
+      font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .prompt-card .prompt-text {
+      font-size: 13px; line-height: 1.7; color: var(--text);
+      background: var(--surface); padding: 12px; border-radius: 8px;
+      word-wrap: break-word; white-space: pre-wrap; margin-bottom: 10px;
+    }
+    .prompt-card .copy-btn {
+      padding: 6px 16px; border: 1px solid var(--border); border-radius: 6px;
+      background: transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer;
+    }
+    .prompt-card .copy-btn:active { background: var(--primary); color: #fff; }
+    .prompt-card .copy-btn.copied { background: var(--success); color: #fff; border-color: var(--success); }
+
+    .results-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+    }
+    .results-header h2 { font-size: 16px; }
+    .results-header .count { font-size: 13px; color: var(--text-secondary); }
+
+    /* ===== Loading ===== */
+    .loading {
+      text-align: center; padding: 40px 20px;
+    }
+    .loading .spinner {
+      width: 32px; height: 32px; border: 3px solid var(--border);
+      border-top-color: var(--primary); border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading p { color: var(--text-secondary); font-size: 14px; }
+
+    /* ===== Modal ===== */
+    .modal {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal.open { display: flex; }
+    .modal-content {
+      background: var(--surface); border-radius: 16px; padding: 24px;
+      width: 88%; max-width: 360px;
+    }
+    .modal-content h2 { font-size: 18px; margin-bottom: 16px; text-align: center; }
+    .modal-content label { display: block; margin-bottom: 6px; }
+    .modal-content input { margin-bottom: 12px; }
+    .modal-content .hint { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+    .modal-content .hint a { color: var(--primary); }
+    .modal-content .btn-modal {
+      width: 100%; padding: 12px; border: none; border-radius: 10px;
+      background: var(--primary); color: #fff; font-size: 15px; font-weight: 500; cursor: pointer;
+    }
+
+    /* ===== Toast ===== */
+    .toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: var(--success); color: #fff; padding: 10px 20px; border-radius: 8px;
+      font-size: 13px; z-index: 200; display: none;
+    }
+    .toast.show { display: block; animation: toastIn 0.3s; }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+    /* ===== Empty ===== */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state p { font-size: 14px; line-height: 1.6; }
+
+    /* ===== Back link ===== */
+    .back-link {
+      display: inline-block; color: var(--text-secondary); text-decoration: none;
+      font-size: 13px; margin-top: 16px;
+    }
+
+    /* ===== Responsive ===== */
+    @media (min-width: 480px) {
+      body { background: #050510; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🎬 剧本提示词生成器</h1>
+    <button id="settingsBtn" title="设置">⚙️</button>
+  </header>
+
+  <main>
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="input">✏️ 输入</button>
+      <button class="tab-btn" data-tab="results" id="resultsTabBtn" disabled>📤 结果</button>
+    </div>
+
+    <!-- Input Tab -->
+    <div class="tab-content active" id="tabInput">
+      <div class="form-group">
+        <label for="scriptInput">📄 剧本/脚本</label>
+        <textarea id="scriptInput" placeholder="粘贴你的剧本内容...&#10;&#10;示例:&#10;场景：深夜办公室&#10;李明盯着电脑屏幕，揉了揉眼睛。&#10;王芳推门进来："还在加班？"&#10;李明叹了口气："这个方案明天要交。""></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="styleInput">🎨 风格</label>
+        <div class="style-row">
+          <input id="styleInput" placeholder="如：赛博朋克、水墨风、宫崎骏..." value="写实电影风格">
+        </div>
+        <div class="style-presets">
+          <button data-style="写实电影风格">🎬 写实电影</button>
+          <button data-style="赛博朋克">🌃 赛博朋克</button>
+          <button data-style="水墨国风">🖌️ 水墨国风</button>
+          <button data-style="宫崎骏动画">🏔️ 宫崎骏</button>
+          <button data-style="暗黑哥特">🦇 暗黑哥特</button>
+          <button data-style="皮克斯动画">🎈 皮克斯</button>
+          <button data-style="浮世绘风格">🌊 浮世绘</button>
+          <button data-style="蒸汽波">🌴 蒸汽波</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="formatSelect">🎯 输出格式</label>
+        <select id="formatSelect">
+          <option value="midjourney">Midjourney</option>
+          <option value="stable-diffusion">Stable Diffusion</option>
+          <option value="dalle">DALL-E 3</option>
+        </select>
+      </div>
+
+      <button class="btn-primary" id="generateBtn">🚀 生成提示词</button>
+    </div>
+
+    <!-- Results Tab -->
+    <div class="tab-content" id="tabResults">
+      <div class="results-header">
+        <h2>📤 生成的提示词</h2>
+        <span class="count" id="resultCount"></span>
+      </div>
+      <div id="resultsContainer">
+        <div class="empty-state">
+          <div class="icon">🎭</div>
+          <p>还没有结果，去「输入」标签页生成吧</p>
+        </div>
+      </div>
+      <button class="btn-primary" id="regenerateBtn" style="margin-top:8px">🔄 重新生成</button>
+    </div>
+  </main>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal" id="settingsModal">
+  <div class="modal-content">
+    <h2>⚙️ 设置</h2>
+    <label for="apiKeyInput">DeepSeek API Key</label>
+    <input type="password" id="apiKeyInput" placeholder="输入 DeepSeek API Key">
+    <p class="hint">在 <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a> 获取</p>
+    <button class="btn-modal" id="saveApiKey">保存</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const App = {
+  data: { results: [] },
+
+  init() {
+    // Load API key
+    const key = localStorage.getItem('deepseek_api_key');
+    if (key) document.getElementById('apiKeyInput').value = key;
+
+    // Events
+    document.getElementById('settingsBtn').onclick = () => openModal();
+    document.getElementById('saveApiKey').onclick = () => {
+      const k = document.getElementById('apiKeyInput').value.trim();
+      if (k) {
+        localStorage.setItem('deepseek_api_key', k);
+        closeModal();
+        toast('API Key 已保存');
+      }
+    };
+    document.getElementById('settingsModal').onclick = (e) => {
+      if (e.target === e.currentTarget) closeModal();
+    };
+
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.onclick = () => switchTab(btn.dataset.tab);
+    });
+
+    // Generate
+    document.getElementById('generateBtn').onclick = () => this.generate();
+    document.getElementById('regenerateBtn').onclick = () => this.generate();
+
+    // Style presets
+    document.querySelectorAll('.style-presets button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.style-presets button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('styleInput').value = btn.dataset.style;
+      };
+    });
+
+    // Auto-show settings if no key
+    if (!localStorage.getItem('deepseek_api_key')) {
+      setTimeout(openModal, 500);
+    }
+  },
+
+  async generate() {
+    const script = document.getElementById('scriptInput').value.trim();
+    const style = document.getElementById('styleInput').value.trim();
+    const format = document.getElementById('formatSelect').value;
+    const apiKey = localStorage.getItem('deepseek_api_key');
+
+    if (!apiKey) { toast('请先在设置中填入 API Key'); openModal(); return; }
+    if (!script) { toast('请粘贴剧本内容'); return; }
+    if (!style) { toast('请填写风格'); return; }
+
+    // Switch to results tab and show loading
+    switchTab('results');
+    const container = document.getElementById('resultsContainer');
+    container.innerHTML = `<div class="loading"><div class="spinner"></div><p>正在分析剧本，生成提示词...</p></div>`;
+    document.getElementById('resultCount').textContent = '';
+
+    const apiMessages = [
+      { role: 'system', content: buildSystemPrompt(format, style) },
+      { role: 'user', content: script }
+    ];
+
+    try {
+      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: apiMessages,
+          temperature: 0.6,
+          max_tokens: 4096
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.text();
+        throw new Error(`API 错误: ${res.status} ${errData}`);
+      }
+
+      const data = await res.json();
+      const reply = data.choices[0].message.content;
+      this.renderResults(reply, style, format);
+    } catch (err) {
+      container.innerHTML = `<div class="empty-state"><p style="color:#ef4444">生成失败：${err.message}</p></div>`;
+    }
+  },
+
+  renderResults(raw, style, format) {
+    const container = document.getElementById('resultsContainer');
+    container.innerHTML = '';
+
+    // Try to parse JSON
+    let prompts = [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        prompts = parsed;
+      } else if (parsed.prompts && Array.isArray(parsed.prompts)) {
+        prompts = parsed.prompts;
+      } else {
+        prompts = [{ scene: '场景', elements: '解析结果', prompt: raw }];
+      }
+    } catch {
+      // Not JSON, split by markdown headings or double newlines
+      const sections = raw.split(/(?=## |### |\d+\.\s+\*\*)/).filter(Boolean);
+      if (sections.length > 1) {
+        prompts = sections.map(s => {
+          const lines = s.trim().split('\n').filter(Boolean);
+          return {
+            scene: lines[0]?.replace(/^#+ */, '') || '场景',
+            elements: '',
+            prompt: lines.slice(1).join('\n')
+          };
+        });
+      } else {
+        prompts = [{ scene: '完整提示词', elements: '', prompt: raw }];
+      }
+    }
+
+    this.data.results = prompts;
+    document.getElementById('resultCount').textContent = `共 ${prompts.length} 个提示词`;
+
+    if (prompts.length === 0) {
+      container.innerHTML = '<div class="empty-state"><p>未能解析出提示词，请重试</p></div>';
+      return;
+    }
+
+    prompts.forEach((p, i) => {
+      const card = document.createElement('div');
+      card.className = 'prompt-card';
+      card.innerHTML = `
+        <div class="scene-title">🎬 ${p.scene || `场景 ${i+1}`}</div>
+        ${p.elements ? `<div class="elements">📌 ${p.elements}</div>` : ''}
+        <div class="prompt-text">${escapeHtml(p.prompt)}</div>
+        <button class="copy-btn" data-index="${i}">📋 复制</button>
+      `;
+      container.appendChild(card);
+    });
+
+    // Copy buttons
+    container.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.onclick = async () => {
+        const idx = parseInt(btn.dataset.index);
+        const text = prompts[idx]?.prompt || '';
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = '✅ 已复制';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = '📋 复制';
+            btn.classList.remove('copied');
+          }, 2000);
+        } catch {
+          // Fallback
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+          toast('已复制到剪贴板');
+        }
+      };
+    });
+  }
+};
+
+/* ===== Helpers ===== */
+
+function buildSystemPrompt(format, style) {
+  const formatGuide = {
+    'midjourney': `- 使用英文单词，用逗号分隔
+- 包含：主体描述、环境、光线、色彩、构图、风格关键词
+- 末尾添加参数如 " --ar 16:9 --v 6"
+- 例如：a futuristic city street at night, neon lights reflecting in puddles, cinematic lighting, cyberpunk aesthetic --ar 16:9 --v 6`,
+    'stable-diffusion': `- 使用英文，正面提示词在前，负面提示词在后
+- 格式：[正面提示词] ### [负面提示词]
+- 包含画质词如 masterpiece, best quality, highly detailed`,
+    'dalle': `- 使用英文自然语言描述
+- 详细描述画面内容、风格、氛围
+- 不需要参数后缀`
+  }[format] || '';
+
+  return `你是一个专业的 AI 绘图提示词工程师。你的任务是根据用户提供的剧本/脚本内容，分析出其中的场景、人物、道具、环境、氛围等元素，然后按照用户指定的风格，生成详细的 AI 绘图提示词。
+
+## 工作步骤
+
+1. **分析剧本**：提取所有关键场景，对每个场景识别出：
+   - 场景名称/时间地点
+   - 主要人物及其动作/表情
+   - 环境/背景细节
+   - 重要道具
+   - 光线/色彩/氛围
+
+2. **生成提示词**：对每个场景，按指定的风格和格式生成绘图提示词
+
+## 风格：${style}
+
+## 输出格式
+
+${formatGuide}
+
+## 输出要求
+
+请以 **JSON 数组** 格式返回，每个元素包含：
+- "scene": 场景名称（中文）
+- "elements": 该场景的关键元素（人物/道具/环境）（中文）
+- "prompt": 生成的完整绘图提示词（按上述格式要求）
+
+返回格式示例：
+[
+  {
+    "scene": "深夜办公室",
+    "elements": "李明(疲惫的男程序员)、王芳(女同事)、电脑屏幕、文件堆、暖色台灯",
+    "prompt": "a tired man sitting at desk in dark office, computer screen glow on face, female colleague at door, warm desk lamp, cinematic lighting, photorealistic style --ar 16:9 --v 6"
+  }
+]
+
+注意：只返回 JSON 数组，不要包含其他文字说明。`;
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab' + tab.charAt(0).toUpperCase() + tab.slice(1)));
+  if (tab === 'results') {
+    document.getElementById('resultsTabBtn').disabled = false;
+  }
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function openModal() { document.getElementById('settingsModal').classList.add('open'); }
+function closeModal() { document.getElementById('settingsModal').classList.remove('open'); }
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Boot
+document.addEventListener('DOMContentLoaded', () => App.init());
+</script>
+</body>
+</html>
