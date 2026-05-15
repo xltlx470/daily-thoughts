@@ -567,8 +567,7 @@ async function generate() {
 - 包含构图、光线、镜头等摄影专业知识
 - 末尾加参数如 --ar 16:9 --v 6
 - 场景示例：深夜办公室，空无一人，电脑屏幕亮着，暖色台灯，窗外城市夜景，伦勃朗布光，85mm定焦，浅景深，青橙色调，电影感 --ar 16:9 --v 6
-- 人物三视图示例：年轻男性正面/侧面/背面三视图，灰色背景，角色设计图，中性表情，服装细节清晰 --ar 16:9 --v 6
-- 人物大头照示例：年轻男性面部特写，蝴蝶光，85mm f/1.4，眼神光，清晰瞳孔细节，柔和背景 --ar 16:9 --v 6`,
+- 人物设计图示例：年轻男性角色设计稿，左中右依次为正面/侧面/背面全身三视图，右下角嵌入面部大头照特写，浅灰背景，统一光照，角色概念设计风格 --ar 16:9 --v 6`,
     'stable-diffusion': `- 使用中文描述
 - 包含专业摄影知识
 - 正面提示词 ### 负面提示词`,
@@ -628,16 +627,18 @@ ${propsJSON}
 - 突出场景的空间感和氛围感
 - 包含完整的摄影专业知识
 
-### 第二类：人物提示词（每个人物两个）
-1. **三视图**：该人物的正面、侧面、背面三视图
-   - 纯色/渐变背景（白色或灰色）
-   - 人物居中，清晰展示服装和体型
-   - 角色设计图风格
-   - 适合用于角色设定和概念设计
-2. **大头照**：该人物的面部特写人像
-   - 专业人像布光（蝴蝶光或伦勃朗光）
-   - 焦点在面部，虚化背景
-   - 突出五官特征和表情
+### 第二类：人物提示词（每个人物一个提示词）
+- 在一张图中同时展示该人物的**三视图（正面+侧面+背面）+ 大头照面部特写**
+- 布局类似角色设计稿：左中右分别是正面/侧面/背面全身，右下角或上方插入面部大头照特写
+- 纯色/渐变背景（白色或浅灰色）
+- 人物居中，清晰展示服装和体型
+- 角色设计图/概念设计风格
+- 大头照部分突出五官细节和专业人像布光
+- 整张图统一光照和色调
+
+### 第三类：道具提示词（每个重要道具一个提示词）
+- 纯色背景下的道具单体展示
+- 商业摄影布光，清晰展示材质细节
 
 ## 输出要求
 以 JSON 格式返回（只返回 JSON，不要其他文字）：
@@ -653,8 +654,7 @@ ${propsJSON}
     {
       "name": "人物名称",
       "desc": "人物特征描述",
-      "three_view": "三视图提示词（中文，包含正面/侧面/背面展示、服装细节、角色设计风格）",
-      "portrait": "大头照提示词（中文，面部特写、人像布光、镜头焦段、表情）"
+      "prompt": "人物设计图提示词（中文，在一张图中包含三视图+大头照，角色设计稿风格）"
     }
   ]
 }
@@ -699,7 +699,7 @@ function renderResults(result) {
   const container = document.getElementById('resultsContainer');
   const scenes = result.scenes || [];
   const characters = result.characters || [];
-  const total = scenes.length + (characters.length * 2);
+  const total = scenes.length + characters.length;
   container.innerHTML = `<div style="margin-bottom:12px;font-size:14px;color:var(--text-secondary)">共 ${scenes.length} 个场景 + ${characters.length} 个人物</div>`;
 
   // ---- Scenes Section ----
@@ -730,21 +730,11 @@ function renderResults(result) {
       card.className = 'prompt-card';
       let html = `<div class="scene-title">👤 ${escapeHtml(ch.name || '人物 ' + (i+1))}</div>`;
       if (ch.desc) html += `<div class="elements">📌 ${escapeHtml(ch.desc)}</div>`;
-
-      // Three-view
-      if (ch.three_view) {
-        html += `<div style="font-size:12px;color:var(--primary-light);margin:8px 0 4px;">📐 三视图</div>`;
-        html += `<div class="prompt-text">${escapeHtml(ch.three_view)}</div>`;
-        html += `<button class="copy-btn" data-text="${escapeHtml(ch.three_view)}" style="margin-right:8px">📋 复制三视图</button>`;
+      if (ch.prompt) {
+        html += `<div style="font-size:12px;color:var(--primary-light);margin:8px 0 4px;">🎨 三视图 + 大头照（一张图）</div>`;
+        html += `<div class="prompt-text">${escapeHtml(ch.prompt)}</div>`;
+        html += `<button class="copy-btn" data-text="${escapeHtml(ch.prompt)}">📋 复制</button>`;
       }
-
-      // Portrait
-      if (ch.portrait) {
-        html += `<div style="font-size:12px;color:var(--primary-light);margin:12px 0 4px;">📸 大头照</div>`;
-        html += `<div class="prompt-text">${escapeHtml(ch.portrait)}</div>`;
-        html += `<button class="copy-btn" data-text="${escapeHtml(ch.portrait)}">📋 复制大头照</button>`;
-      }
-
       card.innerHTML = html;
       section.appendChild(card);
     });
