@@ -265,9 +265,9 @@
       <div class="form-group">
         <label for="formatSelect">🎯 输出格式</label>
         <select id="formatSelect">
-          <option value="midjourney">Midjourney</option>
-          <option value="stable-diffusion">Stable Diffusion</option>
-          <option value="dalle">DALL-E 3</option>
+          <option value="midjourney">Midjourney（英文提示词 + 中文摄影描述）</option>
+          <option value="stable-diffusion">Stable Diffusion（中文提示词）</option>
+          <option value="dalle">DALL-E 3 / 通义万相（中文描述）</option>
         </select>
       </div>
       <div class="btn-row">
@@ -410,21 +410,21 @@ async function analyzeScript() {
 请按以下 JSON 格式返回（只返回 JSON，不要其他文字）：
 {
   "scenes": [
-    { "name": "场景名称", "desc": "环境和氛围描述" }
+    { "name": "场景名称", "desc": "环境描述、光线条件、氛围、时间" }
   ],
   "characters": [
-    { "name": "人物名称", "desc": "人物特征/状态描述" }
+    { "name": "人物名称", "desc": "人物外貌/服装/表情/动作状态" }
   ],
   "props": [
-    { "name": "道具/要素名称", "desc": "说明" }
+    { "name": "道具/要素名称", "desc": "说明（材质、颜色、功能）" }
   ]
 }
 
 注意：
-- scenes 至少提取 1 个场景，每个场景包含名称和描述
-- characters 从剧本中分析所有出现的人物
-- props 提取重要的道具、环境元素、光线、色彩等
-- 描述用中文，简洁清晰`;
+- scenes 至少提取 1 个场景，描述要包含光线、氛围、色彩基调
+- characters 从剧本中分析所有出现的人物，描述外貌和状态
+- props 提取重要的道具、环境元素
+- 描述用中文，尽量详细，为后续生成绘图提示词提供足够信息`;
 
   try {
     const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -563,12 +563,46 @@ async function generate() {
   const propsJSON = JSON.stringify(analysis.props, null, 2);
 
   const formatGuide = {
-    'midjourney': `- 使用英文，逗号分隔关键词\n- 包含：主体、环境、光线、色彩、构图、风格\n- 末尾加参数如 --ar 16:9 --v 6\n- 例如：a dark office at night, tired programmer at desk, cinematic lighting, photorealistic --ar 16:9 --v 6`,
-    'stable-diffusion': `- 使用英文，正面提示词 ### 负面提示词\n- 包含画质词如 masterpiece, best quality`,
-    'dalle': `- 使用英文自然语言详细描述画面内容、风格、氛围`
+    'midjourney': `- 使用中文描述
+- 包含构图、光线、镜头等摄影专业知识
+- 末尾加参数如 --ar 16:9 --v 6
+- 例如：深夜办公室，疲惫程序员坐电脑前，屏幕光照亮面部，暖色台灯，伦勃朗布光，85mm定焦，浅景深，青橙色调，电影感 --ar 16:9 --v 6`,
+    'stable-diffusion': `- 使用中文描述
+- 包含专业摄影知识
+- 正面提示词 ### 负面提示词
+- 例如：masterpiece, best quality, 深夜办公室，疲惫程序员，电脑屏幕光，暖色台灯，电影布光 ### 模糊，失真，低质量`,
+    'dalle': `- 使用中文自然语言详细描述
+- 包含构图、光线、镜头、色彩等摄影专业知识`
   }[format];
 
-  const systemPrompt = `你是一个专业的 AI 绘图提示词工程师。根据用户提供的剧本分析结果和指定风格，为每个场景生成详细的绘图提示词。
+  const systemPrompt = `你是世界顶级的 AI 绘图提示词工程师，同时也是一名资深商业摄影师和电影摄影师。你的专长是将剧本场景转化为极具画面感的专业级绘图提示词。
+
+## 你掌握的摄影专业知识（必须融入每个提示词）
+
+### 1. 构图技巧
+- 三分法则、黄金螺旋、引导线构图、框架构图、对称构图、负空间
+- 拍摄角度：俯拍、仰拍、平视、过肩镜头、鸟瞰视角、低角度
+- 景别：特写、中景、全景、远景、大特写
+
+### 2. 光线运用
+- 布光方式：伦勃朗光、蝴蝶光、侧光、逆光、轮廓光、软光、硬光
+- 光源类型：自然光、窗口光、霓虹灯、烛光、混合色温
+- 光影效果：丁达尔效应、光晕、漏光、剪影、反射光
+
+### 3. 镜头与相机
+- 镜头焦段：24mm广角、35mm人文、50mm标准、85mm人像、135mm长焦、微距
+- 光圈效果：大光圈浅景深、小光圈全景深、星芒效果
+- 特殊镜头：移轴、鱼眼、变形宽银幕
+
+### 4. 色彩与影调
+- 色调：青橙调、低饱和、高对比、胶片感、莫兰迪色、赛博朋克霓虹
+- 色彩心理：冷色调(孤独/科技)、暖色调(温馨/怀旧)、单色
+- 胶片模拟：Kodak Portra 400、富士Classic Chrome、黑白Tri-X
+
+### 5. 氛围与质感
+- 空气透视、雾霾、雨水、灰尘颗粒、烟雾
+- 景深层次：前景、中景、背景
+- 时间感：黄金时刻、蓝调时刻、午夜
 
 ## 剧本分析结果
 
@@ -583,20 +617,18 @@ ${propsJSON}
 
 ## 风格要求：${style}
 
-## 输出格式要求
-${formatGuide}
-
 ## 输出要求
 以 JSON 数组格式返回（只返回 JSON，不要其他文字）：
 [
   {
     "scene": "场景名称（中文）",
-    "elements": "该场景的关键元素概括（中文）",
-    "prompt": "生成的绘图提示词（按格式要求）"
+    "elements": "关键元素概括（中文）",
+    "prompt": "完整的绘图提示词（中文，融入摄影专业知识，100-150字左右，详细描述构图、光线、色彩、镜头、氛围）"
   }
 ]
 
-每个场景生成一个提示词，场景数量与上面提供的场景数量一致。`;
+每个场景生成一个提示词，场景数量与上面提供的场景数量一致。
+要求：提示词必须包含摄影专业知识，让生成的图片具有专业摄影水准。`;
 
   try {
     const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -607,7 +639,7 @@ ${formatGuide}
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: '请根据上面的剧本分析结果，按 ${style} 风格生成所有场景的绘图提示词。' }],
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `请根据上面的剧本分析结果，按「${style}」风格生成所有场景的绘图提示词，务必融入专业摄影知识。` }],
         temperature: 0.6,
         max_tokens: 4096
       })
