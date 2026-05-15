@@ -7,39 +7,24 @@
   <title>剧本提示词生成器</title>
   <style>
     :root {
-      --bg: #0f0f1a;
-      --surface: #1a1a2e;
-      --card: #16213e;
-      --text: #e2e8f0;
-      --text-secondary: #94a3b8;
-      --primary: #7c3aed;
-      --primary-light: #a78bfa;
-      --border: #2a2a4a;
-      --success: #10b981;
+      --bg: #0f0f1a; --surface: #1a1a2e; --card: #16213e;
+      --text: #e2e8f0; --text-secondary: #94a3b8;
+      --primary: #7c3aed; --primary-light: #a78bfa; --primary-dark: #6d28d9;
+      --border: #2a2a4a; --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
       --radius: 12px;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; overflow: hidden; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro SC", "PingFang SC", "Segoe UI", sans-serif;
-      font-size: 15px;
-      background: var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
+      font-size: 15px; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
     }
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh; height: 100dvh;
-      max-width: 480px;
-      margin: 0 auto;
-    }
+    #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 480px; margin: 0 auto; }
 
-    /* ===== Header ===== */
+    /* Header */
     header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
+      padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
     header h1 { font-size: 17px; font-weight: 600; }
     header button {
@@ -48,52 +33,33 @@
     }
     header button:active { background: var(--border); }
 
-    /* ===== Main ===== */
+    /* Main */
     main { flex: 1; overflow-y: auto; padding: 16px; }
 
-    /* ===== Tabs ===== */
-    .tabs {
-      display: flex; gap: 0; margin-bottom: 16px; background: var(--surface);
+    /* Steps */
+    .step-indicator {
+      display: flex; gap: 0; margin-bottom: 20px; background: var(--surface);
       border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
     }
-    .tab-btn {
-      flex: 1; padding: 10px; text-align: center; border: none; background: transparent;
-      color: var(--text-secondary); font-size: 14px; font-weight: 500; cursor: pointer;
-      transition: all 0.2s;
+    .step {
+      flex: 1; padding: 10px 6px; text-align: center; font-size: 12px; font-weight: 500;
+      color: var(--text-secondary); position: relative; transition: all 0.3s;
     }
-    .tab-btn.active { background: var(--primary); color: #fff; }
-    .tab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    .step .num {
+      display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center;
+      border-radius: 50%; background: var(--border); color: var(--text-secondary);
+      font-size: 11px; font-weight: 700; margin-bottom: 4px;
+    }
+    .step.active .num { background: var(--primary); color: #fff; }
+    .step.done .num { background: var(--success); color: #fff; }
+    .step.done { color: var(--success); }
+    .step.active { color: var(--text); }
 
-    /* ===== Form ===== */
-    label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
-    textarea, input, select {
-      width: 100%; padding: 12px 14px; border: 1px solid var(--border);
-      border-radius: 10px; font-size: 14px; outline: none;
-      background: var(--surface); color: var(--text); font-family: inherit;
-      transition: border-color 0.2s;
-    }
-    textarea:focus, input:focus, select:focus { border-color: var(--primary); }
-    textarea { resize: vertical; min-height: 160px; line-height: 1.6; }
-    .form-group { margin-bottom: 16px; }
+    .step-content { display: none; }
+    .step-content.active { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-    .style-row {
-      display: flex; gap: 8px;
-    }
-    .style-row input { flex: 1; }
-    .style-presets {
-      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
-    }
-    .style-presets button {
-      padding: 6px 14px; border: 1px solid var(--border); border-radius: 16px;
-      background: var(--surface); color: var(--text-secondary); font-size: 12px;
-      cursor: pointer; transition: all 0.15s;
-    }
-    .style-presets button:active, .style-presets button.selected {
-      background: var(--primary); color: #fff; border-color: var(--primary);
-    }
-
+    /* Buttons */
     .btn-primary {
       width: 100%; padding: 14px; border: none; border-radius: 10px;
       background: var(--primary); color: #fff; font-size: 16px; font-weight: 600;
@@ -102,22 +68,87 @@
     .btn-primary:active { opacity: 0.8; }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ===== Results ===== */
+    .btn-secondary {
+      padding: 10px 20px; border: 1px solid var(--border); border-radius: 8px;
+      background: transparent; color: var(--text-secondary); font-size: 14px; cursor: pointer;
+    }
+    .btn-secondary:active { background: var(--surface); }
+
+    .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+    .btn-row .btn-primary, .btn-row .btn-secondary { width: auto; flex: 1; padding: 12px; font-size: 14px; }
+
+    /* Form */
+    label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+    textarea, input, select {
+      width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+      font-size: 14px; outline: none; background: var(--surface); color: var(--text);
+      font-family: inherit; transition: border-color 0.2s;
+    }
+    textarea:focus, input:focus, select:focus { border-color: var(--primary); }
+    textarea { resize: vertical; min-height: 140px; line-height: 1.6; }
+    .form-group { margin-bottom: 16px; }
+
+    /* Analysis Cards */
+    .section-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px; margin-top: 20px;
+    }
+    .section-header:first-child { margin-top: 0; }
+    .section-header h3 { font-size: 15px; font-weight: 600; }
+    .section-header .badge {
+      font-size: 12px; padding: 2px 10px; border-radius: 10px; background: var(--border); color: var(--text-secondary);
+    }
+    .section-header button {
+      background: none; border: none; color: var(--primary-light); font-size: 13px; cursor: pointer;
+      padding: 4px 8px; border-radius: 6px;
+    }
+    .section-header button:active { background: var(--border); }
+
+    .item-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .item-card .info { flex: 1; min-width: 0; }
+    .item-card .title { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+    .item-card .desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+    .item-card .actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 8px; }
+    .item-card .actions button {
+      background: none; border: none; font-size: 16px; cursor: pointer;
+      padding: 4px 6px; border-radius: 6px; color: var(--text-secondary);
+    }
+    .item-card .actions button:active { background: var(--border); }
+    .item-card .actions .del-btn:active { color: var(--danger); }
+
+    .add-btn {
+      width: 100%; padding: 10px; border: 1px dashed var(--border); border-radius: 10px;
+      background: transparent; color: var(--text-secondary); font-size: 13px; cursor: pointer; text-align: center;
+    }
+    .add-btn:active { background: var(--surface); }
+
+    /* Style selector */
+    .style-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;
+    }
+    .style-option {
+      padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+      text-align: center; background: var(--surface); cursor: pointer; transition: all 0.15s;
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .style-option:active { transform: scale(0.97); }
+    .style-option.selected { border-color: var(--primary); background: rgba(124,58,237,0.15); color: var(--primary-light); }
+    .style-option .emoji { font-size: 24px; display: block; margin-bottom: 4px; }
+
+    /* Results */
     .prompt-card {
       background: var(--card); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
     }
-    .prompt-card .scene-title {
-      font-size: 14px; font-weight: 600; color: var(--primary-light); margin-bottom: 8px;
-    }
-    .prompt-card .elements {
-      font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;
-      line-height: 1.5;
-    }
+    .prompt-card .scene-title { font-size: 14px; font-weight: 600; color: var(--primary-light); margin-bottom: 6px; }
+    .prompt-card .elements { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5; }
     .prompt-card .prompt-text {
-      font-size: 13px; line-height: 1.7; color: var(--text);
-      background: var(--surface); padding: 12px; border-radius: 8px;
-      word-wrap: break-word; white-space: pre-wrap; margin-bottom: 10px;
+      font-size: 13px; line-height: 1.7; background: var(--surface);
+      padding: 12px; border-radius: 8px; word-wrap: break-word; white-space: pre-wrap; margin-bottom: 10px;
     }
     .prompt-card .copy-btn {
       padding: 6px 16px; border: 1px solid var(--border); border-radius: 6px;
@@ -126,16 +157,8 @@
     .prompt-card .copy-btn:active { background: var(--primary); color: #fff; }
     .prompt-card .copy-btn.copied { background: var(--success); color: #fff; border-color: var(--success); }
 
-    .results-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
-    }
-    .results-header h2 { font-size: 16px; }
-    .results-header .count { font-size: 13px; color: var(--text-secondary); }
-
-    /* ===== Loading ===== */
-    .loading {
-      text-align: center; padding: 40px 20px;
-    }
+    /* Loading */
+    .loading { text-align: center; padding: 40px 20px; }
     .loading .spinner {
       width: 32px; height: 32px; border: 3px solid var(--border);
       border-top-color: var(--primary); border-radius: 50%;
@@ -144,7 +167,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading p { color: var(--text-secondary); font-size: 14px; }
 
-    /* ===== Modal ===== */
+    /* Modal */
     .modal {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
       align-items: center; justify-content: center; z-index: 100;
@@ -152,42 +175,25 @@
     .modal.open { display: flex; }
     .modal-content {
       background: var(--surface); border-radius: 16px; padding: 24px;
-      width: 88%; max-width: 360px;
+      width: 88%; max-width: 360px; max-height: 80vh; overflow-y: auto;
     }
-    .modal-content h2 { font-size: 18px; margin-bottom: 16px; text-align: center; }
-    .modal-content label { display: block; margin-bottom: 6px; }
-    .modal-content input { margin-bottom: 12px; }
-    .modal-content .hint { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
-    .modal-content .hint a { color: var(--primary); }
+    .modal-content h2 { font-size: 18px; margin-bottom: 16px; }
     .modal-content .btn-modal {
       width: 100%; padding: 12px; border: none; border-radius: 10px;
-      background: var(--primary); color: #fff; font-size: 15px; font-weight: 500; cursor: pointer;
+      background: var(--primary); color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; margin-top: 8px;
+    }
+    .modal-content .btn-modal-danger {
+      background: var(--danger);
     }
 
-    /* ===== Toast ===== */
+    /* Toast */
     .toast {
       position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-      background: var(--success); color: #fff; padding: 10px 20px; border-radius: 8px;
-      font-size: 13px; z-index: 200; display: none;
+      background: var(--text); color: var(--bg); padding: 10px 20px; border-radius: 8px;
+      font-size: 13px; z-index: 200; display: none; white-space: nowrap;
     }
     .toast.show { display: block; animation: toastIn 0.3s; }
     @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-
-    /* ===== Empty ===== */
-    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
-    .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
-    .empty-state p { font-size: 14px; line-height: 1.6; }
-
-    /* ===== Back link ===== */
-    .back-link {
-      display: inline-block; color: var(--text-secondary); text-decoration: none;
-      font-size: 13px; margin-top: 16px;
-    }
-
-    /* ===== Responsive ===== */
-    @media (min-width: 480px) {
-      body { background: #050510; }
-    }
   </style>
 </head>
 <body>
@@ -198,36 +204,64 @@
   </header>
 
   <main>
-    <!-- Tabs -->
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="input">✏️ 输入</button>
-      <button class="tab-btn" data-tab="results" id="resultsTabBtn" disabled>📤 结果</button>
+    <!-- Step Indicator -->
+    <div class="step-indicator" id="stepIndicator">
+      <div class="step active" data-step="1"><div class="num">1</div>输入剧本</div>
+      <div class="step" data-step="2"><div class="num">2</div>审核分析</div>
+      <div class="step" data-step="3"><div class="num">3</div>风格+生成</div>
+      <div class="step" data-step="4"><div class="num">4</div>结果</div>
     </div>
 
-    <!-- Input Tab -->
-    <div class="tab-content active" id="tabInput">
+    <!-- ===== Step 1: Input Script ===== -->
+    <div class="step-content active" data-step="1">
       <div class="form-group">
-        <label for="scriptInput">📄 剧本/脚本</label>
-        <textarea id="scriptInput" placeholder="粘贴你的剧本内容...&#10;&#10;示例:&#10;场景：深夜办公室&#10;李明盯着电脑屏幕，揉了揉眼睛。&#10;王芳推门进来："还在加班？"&#10;李明叹了口气："这个方案明天要交。""></textarea>
+        <label for="scriptInput">📄 粘贴剧本</label>
+        <textarea id="scriptInput" placeholder="把剧本内容粘贴到这里...&#10;&#10;示例：&#10;场景：深夜办公室&#10;李明盯着电脑屏幕，揉了揉眼睛。&#10;王芳推门进来："还在加班？"&#10;李明叹了口气："这个方案明天要交。""></textarea>
       </div>
+      <button class="btn-primary" id="analyzeBtn">🔍 分析剧本</button>
+    </div>
 
+    <!-- ===== Step 2: Review Analysis ===== -->
+    <div class="step-content" data-step="2">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">AI 分析了剧本内容，请审核以下信息。你可以编辑、添加或删除项目。</p>
+
+      <!-- Scenes -->
+      <div class="section-header">
+        <h3>🎬 场景</h3>
+        <span class="badge" id="sceneCount">0</span>
+      </div>
+      <div id="sceneList"></div>
+      <button class="add-btn" onclick="editItem('scene', null)">+ 添加场景</button>
+
+      <!-- Characters -->
+      <div class="section-header">
+        <h3>👤 人物</h3>
+        <span class="badge" id="charCount">0</span>
+      </div>
+      <div id="charList"></div>
+      <button class="add-btn" onclick="editItem('character', null)">+ 添加人物</button>
+
+      <!-- Props -->
+      <div class="section-header">
+        <h3>📦 道具 / 环境要素</h3>
+        <span class="badge" id="propCount">0</span>
+      </div>
+      <div id="propList"></div>
+      <button class="add-btn" onclick="editItem('prop', null)">+ 添加道具</button>
+
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goStep(1)">← 返回修改</button>
+        <button class="btn-primary" onclick="goStep(3)">确认，下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ===== Step 3: Style + Generate ===== -->
+    <div class="step-content" data-step="3">
       <div class="form-group">
-        <label for="styleInput">🎨 风格</label>
-        <div class="style-row">
-          <input id="styleInput" placeholder="如：赛博朋克、水墨风、宫崎骏..." value="写实电影风格">
-        </div>
-        <div class="style-presets">
-          <button data-style="写实电影风格">🎬 写实电影</button>
-          <button data-style="赛博朋克">🌃 赛博朋克</button>
-          <button data-style="水墨国风">🖌️ 水墨国风</button>
-          <button data-style="宫崎骏动画">🏔️ 宫崎骏</button>
-          <button data-style="暗黑哥特">🦇 暗黑哥特</button>
-          <button data-style="皮克斯动画">🎈 皮克斯</button>
-          <button data-style="浮世绘风格">🌊 浮世绘</button>
-          <button data-style="蒸汽波">🌴 蒸汽波</button>
-        </div>
+        <label>🎨 选择风格</label>
+        <div class="style-grid" id="styleGrid"></div>
+        <input id="customStyle" placeholder="或自定义风格..." style="margin-top:8px;">
       </div>
-
       <div class="form-group">
         <label for="formatSelect">🎯 输出格式</label>
         <select id="formatSelect">
@@ -236,25 +270,40 @@
           <option value="dalle">DALL-E 3</option>
         </select>
       </div>
-
-      <button class="btn-primary" id="generateBtn">🚀 生成提示词</button>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goStep(2)">← 审核修改</button>
+        <button class="btn-primary" id="generateBtn">🚀 生成提示词</button>
+      </div>
     </div>
 
-    <!-- Results Tab -->
-    <div class="tab-content" id="tabResults">
-      <div class="results-header">
-        <h2>📤 生成的提示词</h2>
-        <span class="count" id="resultCount"></span>
+    <!-- ===== Step 4: Results ===== -->
+    <div class="step-content" data-step="4">
+      <div id="resultsContainer"></div>
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="goStep(3)">← 换风格重试</button>
+        <button class="btn-secondary" onclick="goStep(2)">✏️ 修改分析</button>
       </div>
-      <div id="resultsContainer">
-        <div class="empty-state">
-          <div class="icon">🎭</div>
-          <p>还没有结果，去「输入」标签页生成吧</p>
-        </div>
-      </div>
-      <button class="btn-primary" id="regenerateBtn" style="margin-top:8px">🔄 重新生成</button>
     </div>
   </main>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal" id="editModal">
+  <div class="modal-content">
+    <h2 id="editModalTitle">编辑</h2>
+    <div class="form-group">
+      <label id="editLabel1">名称</label>
+      <input id="editInput1" placeholder="名称">
+    </div>
+    <div class="form-group" id="editField2Group">
+      <label id="editLabel2">描述</label>
+      <input id="editInput2" placeholder="描述">
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="closeEditModal()" style="flex:1">取消</button>
+      <button class="btn-primary" id="editSaveBtn" style="flex:2">保存</button>
+    </div>
+  </div>
 </div>
 
 <!-- Settings Modal -->
@@ -263,7 +312,7 @@
     <h2>⚙️ 设置</h2>
     <label for="apiKeyInput">DeepSeek API Key</label>
     <input type="password" id="apiKeyInput" placeholder="输入 DeepSeek API Key">
-    <p class="hint">在 <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a> 获取</p>
+    <p class="hint" style="font-size:12px;color:var(--text-secondary);margin:8px 0 16px;">在 platform.deepseek.com 获取</p>
     <button class="btn-modal" id="saveApiKey">保存</button>
   </div>
 </div>
@@ -272,261 +321,366 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const App = {
-  data: { results: [] },
-
-  init() {
-    // Load API key
-    const key = localStorage.getItem('deepseek_api_key');
-    if (key) document.getElementById('apiKeyInput').value = key;
-
-    // Events
-    document.getElementById('settingsBtn').onclick = () => openModal();
-    document.getElementById('saveApiKey').onclick = () => {
-      const k = document.getElementById('apiKeyInput').value.trim();
-      if (k) {
-        localStorage.setItem('deepseek_api_key', k);
-        closeModal();
-        toast('API Key 已保存');
-      }
-    };
-    document.getElementById('settingsModal').onclick = (e) => {
-      if (e.target === e.currentTarget) closeModal();
-    };
-
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.onclick = () => switchTab(btn.dataset.tab);
-    });
-
-    // Generate
-    document.getElementById('generateBtn').onclick = () => this.generate();
-    document.getElementById('regenerateBtn').onclick = () => this.generate();
-
-    // Style presets
-    document.querySelectorAll('.style-presets button').forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll('.style-presets button').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        document.getElementById('styleInput').value = btn.dataset.style;
-      };
-    });
-
-    // Auto-show settings if no key
-    if (!localStorage.getItem('deepseek_api_key')) {
-      setTimeout(openModal, 500);
-    }
-  },
-
-  async generate() {
-    const script = document.getElementById('scriptInput').value.trim();
-    const style = document.getElementById('styleInput').value.trim();
-    const format = document.getElementById('formatSelect').value;
-    const apiKey = localStorage.getItem('deepseek_api_key');
-
-    if (!apiKey) { toast('请先在设置中填入 API Key'); openModal(); return; }
-    if (!script) { toast('请粘贴剧本内容'); return; }
-    if (!style) { toast('请填写风格'); return; }
-
-    // Switch to results tab and show loading
-    switchTab('results');
-    const container = document.getElementById('resultsContainer');
-    container.innerHTML = `<div class="loading"><div class="spinner"></div><p>正在分析剧本，生成提示词...</p></div>`;
-    document.getElementById('resultCount').textContent = '';
-
-    const apiMessages = [
-      { role: 'system', content: buildSystemPrompt(format, style) },
-      { role: 'user', content: script }
-    ];
-
-    try {
-      const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: apiMessages,
-          temperature: 0.6,
-          max_tokens: 4096
-        })
-      });
-
-      if (!res.ok) {
-        const errData = await res.text();
-        throw new Error(`API 错误: ${res.status} ${errData}`);
-      }
-
-      const data = await res.json();
-      const reply = data.choices[0].message.content;
-      this.renderResults(reply, style, format);
-    } catch (err) {
-      container.innerHTML = `<div class="empty-state"><p style="color:#ef4444">生成失败：${err.message}</p></div>`;
-    }
-  },
-
-  renderResults(raw, style, format) {
-    const container = document.getElementById('resultsContainer');
-    container.innerHTML = '';
-
-    // Try to parse JSON
-    let prompts = [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        prompts = parsed;
-      } else if (parsed.prompts && Array.isArray(parsed.prompts)) {
-        prompts = parsed.prompts;
-      } else {
-        prompts = [{ scene: '场景', elements: '解析结果', prompt: raw }];
-      }
-    } catch {
-      // Not JSON, split by markdown headings or double newlines
-      const sections = raw.split(/(?=## |### |\d+\.\s+\*\*)/).filter(Boolean);
-      if (sections.length > 1) {
-        prompts = sections.map(s => {
-          const lines = s.trim().split('\n').filter(Boolean);
-          return {
-            scene: lines[0]?.replace(/^#+ */, '') || '场景',
-            elements: '',
-            prompt: lines.slice(1).join('\n')
-          };
-        });
-      } else {
-        prompts = [{ scene: '完整提示词', elements: '', prompt: raw }];
-      }
-    }
-
-    this.data.results = prompts;
-    document.getElementById('resultCount').textContent = `共 ${prompts.length} 个提示词`;
-
-    if (prompts.length === 0) {
-      container.innerHTML = '<div class="empty-state"><p>未能解析出提示词，请重试</p></div>';
-      return;
-    }
-
-    prompts.forEach((p, i) => {
-      const card = document.createElement('div');
-      card.className = 'prompt-card';
-      card.innerHTML = `
-        <div class="scene-title">🎬 ${p.scene || `场景 ${i+1}`}</div>
-        ${p.elements ? `<div class="elements">📌 ${p.elements}</div>` : ''}
-        <div class="prompt-text">${escapeHtml(p.prompt)}</div>
-        <button class="copy-btn" data-index="${i}">📋 复制</button>
-      `;
-      container.appendChild(card);
-    });
-
-    // Copy buttons
-    container.querySelectorAll('.copy-btn').forEach(btn => {
-      btn.onclick = async () => {
-        const idx = parseInt(btn.dataset.index);
-        const text = prompts[idx]?.prompt || '';
-        try {
-          await navigator.clipboard.writeText(text);
-          btn.textContent = '✅ 已复制';
-          btn.classList.add('copied');
-          setTimeout(() => {
-            btn.textContent = '📋 复制';
-            btn.classList.remove('copied');
-          }, 2000);
-        } catch {
-          // Fallback
-          const ta = document.createElement('textarea');
-          ta.value = text;
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          ta.remove();
-          toast('已复制到剪贴板');
-        }
-      };
-    });
-  }
+// ===== App State =====
+const state = {
+  analysis: { scenes: [], characters: [], props: [] },
+  currentStep: 1,
+  results: []
 };
 
-/* ===== Helpers ===== */
+// Style presets
+const STYLES = [
+  { emoji: '🎬', name: '写实电影' },
+  { emoji: '🌃', name: '赛博朋克' },
+  { emoji: '🖌️', name: '水墨国风' },
+  { emoji: '🏔️', name: '宫崎骏' },
+  { emoji: '🦇', name: '暗黑哥特' },
+  { emoji: '🎈', name: '皮克斯动画' },
+  { emoji: '🌊', name: '浮世绘' },
+  { emoji: '🌴', name: '蒸汽波' },
+];
 
-function buildSystemPrompt(format, style) {
+// ===== Init =====
+document.addEventListener('DOMContentLoaded', () => {
+  // API key
+  const saved = localStorage.getItem('deepseek_api_key');
+  if (saved) document.getElementById('apiKeyInput').value = saved;
+  document.getElementById('saveApiKey').onclick = () => {
+    const k = document.getElementById('apiKeyInput').value.trim();
+    if (k) { localStorage.setItem('deepseek_api_key', k); closeSettings(); toast('已保存'); }
+  };
+  document.getElementById('settingsBtn').onclick = () => openSettings();
+  document.getElementById('settingsModal').onclick = (e) => { if (e.target === e.currentTarget) closeSettings(); };
+
+  // Init style grid
+  const grid = document.getElementById('styleGrid');
+  STYLES.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'style-option';
+    div.innerHTML = `<span class="emoji">${s.emoji}</span>${s.name}`;
+    div.dataset.style = s.name;
+    div.onclick = () => {
+      grid.querySelectorAll('.style-option').forEach(el => el.classList.remove('selected'));
+      div.classList.add('selected');
+      document.getElementById('customStyle').value = s.name;
+    };
+    grid.appendChild(div);
+  });
+  // Default select first
+  grid.querySelector('.style-option')?.classList.add('selected');
+
+  // Analyze
+  document.getElementById('analyzeBtn').onclick = () => analyzeScript();
+
+  // Generate
+  document.getElementById('generateBtn').onclick = () => generate();
+
+  // Auto-open settings
+  if (!localStorage.getItem('deepseek_api_key')) setTimeout(openSettings, 500);
+});
+
+// ===== Step Navigation =====
+function goStep(n) {
+  state.currentStep = n;
+  document.querySelectorAll('.step').forEach(el => {
+    const s = parseInt(el.dataset.step);
+    el.classList.toggle('active', s === n);
+    el.classList.toggle('done', s < n);
+  });
+  document.querySelectorAll('.step-content').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step) === n);
+  });
+  if (n === 2) renderAnalysis();
+  if (n === 4) {} // Results already rendered
+  document.querySelector('main').scrollTop = 0;
+}
+
+// ===== Step 1: Analyze Script =====
+async function analyzeScript() {
+  const script = document.getElementById('scriptInput').value.trim();
+  const apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) { toast('请先设置 API Key'); openSettings(); return; }
+  if (!script) { toast('请粘贴剧本内容'); return; }
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true; btn.textContent = '分析中...';
+
+  const systemPrompt = `你是一个专业的剧本分析助手。分析用户提供的剧本/脚本，提取出结构化信息。
+
+请按以下 JSON 格式返回（只返回 JSON，不要其他文字）：
+{
+  "scenes": [
+    { "name": "场景名称", "desc": "环境和氛围描述" }
+  ],
+  "characters": [
+    { "name": "人物名称", "desc": "人物特征/状态描述" }
+  ],
+  "props": [
+    { "name": "道具/要素名称", "desc": "说明" }
+  ]
+}
+
+注意：
+- scenes 至少提取 1 个场景，每个场景包含名称和描述
+- characters 从剧本中分析所有出现的人物
+- props 提取重要的道具、环境元素、光线、色彩等
+- 描述用中文，简洁清晰`;
+
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: script }],
+        temperature: 0.4,
+        max_tokens: 4096
+      })
+    });
+    if (!res.ok) throw new Error(`API 错误 (${res.status})`);
+
+    const data = await res.json();
+    const reply = data.choices[0].message.content;
+
+    // Parse JSON
+    let parsed;
+    try {
+      parsed = JSON.parse(reply);
+    } catch {
+      // Try to extract JSON from markdown
+      const m = reply.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (m) parsed = JSON.parse(m[1]);
+      else throw new Error('AI 返回格式异常，请重试');
+    }
+
+    state.analysis = {
+      scenes: parsed.scenes || [],
+      characters: parsed.characters || [],
+      props: parsed.props || []
+    };
+
+    goStep(2);
+  } catch (err) {
+    toast('分析失败：' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 分析剧本';
+  }
+}
+
+// ===== Step 2: Render & Edit Analysis =====
+function renderAnalysis() {
+  const a = state.analysis;
+
+  // Scenes
+  document.getElementById('sceneCount').textContent = a.scenes.length;
+  const sl = document.getElementById('sceneList');
+  sl.innerHTML = a.scenes.map((s, i) => cardHTML(s, 'scene', i)).join('');
+
+  // Characters
+  document.getElementById('charCount').textContent = a.characters.length;
+  const cl = document.getElementById('charList');
+  cl.innerHTML = a.characters.map((c, i) => cardHTML(c, 'character', i)).join('');
+
+  // Props
+  document.getElementById('propCount').textContent = a.props.length;
+  const pl = document.getElementById('propList');
+  pl.innerHTML = a.props.map((p, i) => cardHTML(p, 'prop', i)).join('');
+}
+
+function cardHTML(item, type, idx) {
+  return `<div class="item-card">
+    <div class="info">
+      <div class="title">${escapeHtml(item.name)}</div>
+      ${item.desc ? `<div class="desc">${escapeHtml(item.desc)}</div>` : ''}
+    </div>
+    <div class="actions">
+      <button onclick="editItem('${type}', ${idx})">✏️</button>
+      <button class="del-btn" onclick="deleteItem('${type}', ${idx})">🗑️</button>
+    </div>
+  </div>`;
+}
+
+function deleteItem(type, idx) {
+  state.analysis[type + 's'].splice(idx, 1);
+  renderAnalysis();
+}
+
+// Edit modal
+let editContext = { type: null, idx: null };
+
+function editItem(type, idx) {
+  editContext = { type, idx };
+  const list = type + 's';
+  const item = idx !== null ? state.analysis[list][idx] : { name: '', desc: '' };
+
+  const isProp = type === 'prop';
+  document.getElementById('editModalTitle').textContent = idx !== null ? `编辑${isProp ? '道具' : type === 'scene' ? '场景' : '人物'}` : `添加${isProp ? '道具' : type === 'scene' ? '场景' : '人物'}`;
+  document.getElementById('editLabel1').textContent = isProp ? '道具名称' : type === 'scene' ? '场景名称' : '人物名称';
+  document.getElementById('editInput1').value = item.name || '';
+  document.getElementById('editField2Group').style.display = isProp ? 'none' : '';
+  document.getElementById('editLabel2').textContent = type === 'scene' ? '场景描述' : '人物描述';
+  document.getElementById('editInput2').value = item.desc || '';
+
+  document.getElementById('editSaveBtn').onclick = () => {
+    const name = document.getElementById('editInput1').value.trim();
+    const desc = isProp ? '' : document.getElementById('editInput2').value.trim();
+    if (!name) { toast('请填写名称'); return; }
+
+    if (idx !== null) {
+      state.analysis[list][idx] = { name, desc };
+    } else {
+      state.analysis[list].push({ name, desc });
+    }
+    closeEditModal();
+    renderAnalysis();
+  };
+
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEditModal() { document.getElementById('editModal').classList.remove('open'); }
+document.getElementById('editModal').onclick = (e) => { if (e.target === e.currentTarget) closeEditModal(); };
+
+// ===== Step 3: Generate =====
+async function generate() {
+  const apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) { toast('请先设置 API Key'); openSettings(); return; }
+
+  const style = document.getElementById('customStyle').value.trim();
+  if (!style) { toast('请选择或输入风格'); return; }
+  const format = document.getElementById('formatSelect').value;
+
+  goStep(4);
+  const container = document.getElementById('resultsContainer');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div><p>正在生成提示词...</p></div>';
+
+  const analysis = state.analysis;
+  const scenesJSON = JSON.stringify(analysis.scenes, null, 2);
+  const charsJSON = JSON.stringify(analysis.characters, null, 2);
+  const propsJSON = JSON.stringify(analysis.props, null, 2);
+
   const formatGuide = {
-    'midjourney': `- 使用英文单词，用逗号分隔
-- 包含：主体描述、环境、光线、色彩、构图、风格关键词
-- 末尾添加参数如 " --ar 16:9 --v 6"
-- 例如：a futuristic city street at night, neon lights reflecting in puddles, cinematic lighting, cyberpunk aesthetic --ar 16:9 --v 6`,
-    'stable-diffusion': `- 使用英文，正面提示词在前，负面提示词在后
-- 格式：[正面提示词] ### [负面提示词]
-- 包含画质词如 masterpiece, best quality, highly detailed`,
-    'dalle': `- 使用英文自然语言描述
-- 详细描述画面内容、风格、氛围
-- 不需要参数后缀`
-  }[format] || '';
+    'midjourney': `- 使用英文，逗号分隔关键词\n- 包含：主体、环境、光线、色彩、构图、风格\n- 末尾加参数如 --ar 16:9 --v 6\n- 例如：a dark office at night, tired programmer at desk, cinematic lighting, photorealistic --ar 16:9 --v 6`,
+    'stable-diffusion': `- 使用英文，正面提示词 ### 负面提示词\n- 包含画质词如 masterpiece, best quality`,
+    'dalle': `- 使用英文自然语言详细描述画面内容、风格、氛围`
+  }[format];
 
-  return `你是一个专业的 AI 绘图提示词工程师。你的任务是根据用户提供的剧本/脚本内容，分析出其中的场景、人物、道具、环境、氛围等元素，然后按照用户指定的风格，生成详细的 AI 绘图提示词。
+  const systemPrompt = `你是一个专业的 AI 绘图提示词工程师。根据用户提供的剧本分析结果和指定风格，为每个场景生成详细的绘图提示词。
 
-## 工作步骤
+## 剧本分析结果
 
-1. **分析剧本**：提取所有关键场景，对每个场景识别出：
-   - 场景名称/时间地点
-   - 主要人物及其动作/表情
-   - 环境/背景细节
-   - 重要道具
-   - 光线/色彩/氛围
+### 场景
+${scenesJSON}
 
-2. **生成提示词**：对每个场景，按指定的风格和格式生成绘图提示词
+### 人物
+${charsJSON}
 
-## 风格：${style}
+### 道具/环境要素
+${propsJSON}
 
-## 输出格式
+## 风格要求：${style}
 
+## 输出格式要求
 ${formatGuide}
 
 ## 输出要求
-
-请以 **JSON 数组** 格式返回，每个元素包含：
-- "scene": 场景名称（中文）
-- "elements": 该场景的关键元素（人物/道具/环境）（中文）
-- "prompt": 生成的完整绘图提示词（按上述格式要求）
-
-返回格式示例：
+以 JSON 数组格式返回（只返回 JSON，不要其他文字）：
 [
   {
-    "scene": "深夜办公室",
-    "elements": "李明(疲惫的男程序员)、王芳(女同事)、电脑屏幕、文件堆、暖色台灯",
-    "prompt": "a tired man sitting at desk in dark office, computer screen glow on face, female colleague at door, warm desk lamp, cinematic lighting, photorealistic style --ar 16:9 --v 6"
+    "scene": "场景名称（中文）",
+    "elements": "该场景的关键元素概括（中文）",
+    "prompt": "生成的绘图提示词（按格式要求）"
   }
 ]
 
-注意：只返回 JSON 数组，不要包含其他文字说明。`;
-}
+每个场景生成一个提示词，场景数量与上面提供的场景数量一致。`;
 
-function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab' + tab.charAt(0).toUpperCase() + tab.slice(1)));
-  if (tab === 'results') {
-    document.getElementById('resultsTabBtn').disabled = false;
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: '请根据上面的剧本分析结果，按 ${style} 风格生成所有场景的绘图提示词。' }],
+        temperature: 0.6,
+        max_tokens: 4096
+      })
+    });
+    if (!res.ok) throw new Error(`API 错误 (${res.status})`);
+
+    const data = await res.json();
+    const reply = data.choices[0].message.content;
+
+    let prompts;
+    try {
+      prompts = JSON.parse(reply);
+    } catch {
+      const m = reply.match(/```(?:json)?\s*([\s\S]*?)```/);
+      prompts = m ? JSON.parse(m[1]) : [{ scene: '完整提示词', elements: '', prompt: reply }];
+    }
+
+    if (!Array.isArray(prompts)) prompts = [prompts];
+    state.results = prompts;
+    renderResults(prompts);
+  } catch (err) {
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444">生成失败：${err.message}</div>`;
   }
 }
 
+function renderResults(prompts) {
+  const container = document.getElementById('resultsContainer');
+  container.innerHTML = `<div style="margin-bottom:12px;font-size:14px;color:var(--text-secondary)">共 ${prompts.length} 个提示词</div>`;
+
+  prompts.forEach((p, i) => {
+    const card = document.createElement('div');
+    card.className = 'prompt-card';
+    card.innerHTML = `
+      <div class="scene-title">🎬 ${escapeHtml(p.scene || '场景 ' + (i+1))}</div>
+      ${p.elements ? `<div class="elements">📌 ${escapeHtml(p.elements)}</div>` : ''}
+      <div class="prompt-text">${escapeHtml(p.prompt)}</div>
+      <button class="copy-btn" data-text="${escapeHtml(p.prompt)}">📋 复制</button>
+    `;
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.text);
+        btn.textContent = '✅ 已复制'; btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = '📋 复制'; btn.classList.remove('copied'); }, 2000);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = btn.dataset.text; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); ta.remove();
+        toast('已复制');
+      }
+    };
+  });
+}
+
+// ===== Helpers =====
 function escapeHtml(str) {
+  if (!str) return '';
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
 }
 
-function openModal() { document.getElementById('settingsModal').classList.add('open'); }
-function closeModal() { document.getElementById('settingsModal').classList.remove('open'); }
+function openSettings() { document.getElementById('settingsModal').classList.add('open'); }
+function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
 
 function toast(msg) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
+  el.textContent = msg; el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2500);
 }
-
-// Boot
-document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
 </html>
