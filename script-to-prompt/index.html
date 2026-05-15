@@ -263,12 +263,14 @@
       <div id="promptResultWrap">
         <textarea class="prompt-input" id="promptResult" placeholder="Prompt 将在这里生成，你也可以直接编辑修改..."></textarea>
         <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-secondary" id="regenBtn" style="display:none;font-size:13px">🔄 重新生成</button>
           <button class="copy-btn" id="copyPromptBtn">📋 复制 Prompt</button>
           <button class="btn-secondary" id="updatePromptBtn" style="flex:1;display:none" onclick="saveEditedPrompt()">💾 保存修改</button>
         </div>
       </div>
       <div class="btn-row" id="navBtns" style="display:none">
-        <button class="btn-secondary" onclick="goStep(2)">← 场景清单</button>
+        <button class="btn-secondary" id="prevBtn" style="display:none">← 上一个</button>
+        <button class="btn-secondary" onclick="goStep(2)">📋 清单</button>
         <button class="btn-primary" id="nextSceneBtn">下一个场景 →</button>
       </div>
     </div>  <!-- /step-content 3 -->
@@ -440,6 +442,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.getElementById('nextSceneBtn').onclick = nextScene;
   document.getElementById('copyPromptBtn').onclick = copyPrompt;
+  document.getElementById('prevBtn').onclick = prevScene;
+  document.getElementById('regenBtn').onclick = regeneratePrompt;
 
   // Mode switching
   document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -910,8 +914,10 @@ function showCurrentScene() {
     document.getElementById('promptResult').value = S.generated[idx];
     document.getElementById('promptResultWrap').style.display = 'block';
     document.getElementById('copyPromptBtn').classList.add('show');
+    document.getElementById('regenBtn').style.display = '';
     document.getElementById('genPromptBtn').style.display = 'none';
     document.getElementById('navBtns').style.display = 'flex';
+    document.getElementById('prevBtn').style.display = idx > 0 ? '' : 'none';
     document.getElementById('nextSceneBtn').textContent =
       idx < S.totalScenes - 1 ? '下一个场景 →' : (S.charTotal > 0 ? '→ 生成角色 Prompt' : '✅ 全部完成');
   }
@@ -959,8 +965,10 @@ function showCurrentCharacter() {
     document.getElementById('promptResult').value = S.charGenerated[idx];
     document.getElementById('promptResultWrap').style.display = 'block';
     document.getElementById('copyPromptBtn').classList.add('show');
+    document.getElementById('regenBtn').style.display = '';
     document.getElementById('genPromptBtn').style.display = 'none';
     document.getElementById('navBtns').style.display = 'flex';
+    document.getElementById('prevBtn').style.display = idx > 0 ? '' : 'none';
     document.getElementById('nextSceneBtn').textContent =
       idx < S.charTotal - 1 ? '下一个角色 →' : '✅ 全部完成';
   }
@@ -1221,9 +1229,11 @@ function showGeneratedPrompt(idx) {
   document.getElementById('promptResult').value = S.generated[idx];
   document.getElementById('promptResultWrap').style.display = 'block';
   document.getElementById('copyPromptBtn').classList.add('show');
+  document.getElementById('regenBtn').style.display = '';
   document.getElementById('updatePromptBtn').style.display = 'none';
   document.getElementById('genPromptBtn').style.display = 'none';
   document.getElementById('navBtns').style.display = 'flex';
+  document.getElementById('prevBtn').style.display = idx > 0 ? '' : 'none';
   const isLast = idx >= S.totalScenes - 1;
   document.getElementById('nextSceneBtn').textContent = isLast ? '✅ 全部完成' : '下一个场景 →';
 }
@@ -1234,6 +1244,7 @@ function resetPromptArea() {
   document.getElementById('copyPromptBtn').classList.remove('show');
   document.getElementById('copyPromptBtn').classList.remove('copied');
   document.getElementById('copyPromptBtn').textContent = '📋 复制 Prompt';
+  document.getElementById('regenBtn').style.display = 'none';
   document.getElementById('updatePromptBtn').style.display = 'none';
   resetGenBtnText();
   document.getElementById('navBtns').style.display = 'none';
@@ -1293,6 +1304,37 @@ function nextScene() {
   } else {
     toast('🎉 全部场景 Prompt 已生成完成！');
   }
+}
+
+function prevScene() {
+  if (S.phase === 'character') {
+    if (S.charCurrentIdx > 0) {
+      S.charCurrentIdx--;
+      showCurrentCharacter();
+    } else {
+      toast('已经是第一个角色');
+    }
+    return;
+  }
+  if (S.currentIdx > 0) {
+    S.currentIdx--;
+    showCurrentScene();
+  } else {
+    toast('已经是第一个场景');
+  }
+}
+
+function regeneratePrompt() {
+  if (S.phase === 'character') {
+    if (!S.charGenerated[S.charCurrentIdx]) { toast('还没有生成的 Prompt'); return; }
+    S.charGenerated[S.charCurrentIdx] = '';
+  } else {
+    if (!S.generated[S.currentIdx]) { toast('还没有生成的 Prompt'); return; }
+    S.generated[S.currentIdx] = '';
+  }
+  document.getElementById('regenBtn').style.display = 'none';
+  resetPromptArea();
+  toast('已清除，可以重新生成');
 }
 
 function copyPrompt() {
@@ -1424,9 +1466,11 @@ function showGeneratedCharPrompt(idx) {
   document.getElementById('promptResult').value = S.charGenerated[idx];
   document.getElementById('promptResultWrap').style.display = 'block';
   document.getElementById('copyPromptBtn').classList.add('show');
+  document.getElementById('regenBtn').style.display = '';
   document.getElementById('updatePromptBtn').style.display = 'none';
   document.getElementById('genPromptBtn').style.display = 'none';
   document.getElementById('navBtns').style.display = 'flex';
+  document.getElementById('prevBtn').style.display = idx > 0 ? '' : 'none';
   const isLast = idx >= S.charTotal - 1;
   document.getElementById('nextSceneBtn').textContent = isLast ? '✅ 全部完成' : '下一个角色 →';
 }
