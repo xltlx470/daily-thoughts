@@ -234,6 +234,12 @@
         <label for="scriptInput">📄 粘贴剧本 / 剧情 / 故事梗概 / 分场大纲 / 场景描述</label>
         <textarea id="scriptInput" placeholder="把剧本内容粘贴到这里..."></textarea>
       </div>
+      <div class="form-group">
+        <label for="toneInput">🎬 剧本定调（可选）— 直接告诉 AI 你想要的视觉风格方向</label>
+        <textarea id="toneInput" placeholder="例如：
+本片为黑暗写实风格，整体色调偏冷，光影反差大，参考《银翼杀手2049》的视觉语言…
+也可以简单写：赛博朋克霓虹风 / 日系清新治愈 / 复古胶片质感 / 废土粗粝风格" rows="3" style="min-height:60px;font-size:13px;color:var(--text-secondary)"></textarea>
+      </div>
       <button class="btn-primary" id="extractBtn">📋 提取场景清单</button>
     </div>
 
@@ -273,6 +279,10 @@
       <div class="form-group">
         <label for="refineInput">✏️ 用你的话描述场景</label>
         <textarea id="refineInput" placeholder="随便写，越详细越好...&#10;&#10;例如：&#10;一个废弃的矿井入口，下着暴雨，周围漆黑一片，只有一盏矿灯照亮了生锈的铁栅栏，地上有积水。"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label for="refineTone">🎨 定调（可选）— 描述你想要的整体视觉风格</label>
+        <input id="refineTone" placeholder="如：赛博朋克霓虹风 / 黑暗写实 / 日系清新 / 废土粗粝" value="" style="font-size:13px;color:var(--text-secondary)">
       </div>
       <div class="inline-row" style="margin-bottom:12px">
         <div style="flex:1">
@@ -397,6 +407,7 @@ const S = {
   characters: [],
   artStyle: null,
   notes: '',
+  toneDirective: '',
   currentIdx: 0,
   totalScenes: 0,
   generated: [],
@@ -577,6 +588,7 @@ async function extractScenes() {
   if (!script) { toast('请粘贴剧本内容'); return; }
 
   S.script = script;
+  S.toneDirective = document.getElementById('toneInput').value.trim();
   const btn = document.getElementById('extractBtn');
   btn.disabled = true; btn.textContent = '提取中...';
 
@@ -586,7 +598,12 @@ async function extractScenes() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages: [{ role: 'system', content: EXTRACT_PROMPT }, { role: 'user', content: script }],
+        messages: [
+          { role: 'system', content: S.toneDirective
+            ? EXTRACT_PROMPT + '\n\n## 剧本整体定调\n' + S.toneDirective + '\n所有场景的艺术风格必须优先符合这个定调方向。'
+            : EXTRACT_PROMPT },
+          { role: 'user', content: script }
+        ],
         temperature: 0.3, max_tokens: 4096
       })
     });
@@ -1134,11 +1151,15 @@ ${sc.previousPrompt ? '- 前一场空间关系参考：' + sc.previousPrompt.sub
 
   const styleInfo = as ? `\n- 主风格：${as.main || '电影级超写实'}\n- 时代/地域：${as.era || '-'}\n- 类型气质：${as.mood || '-'}\n- 色彩基调：${as.color || '-'}\n- 光影方向：${as.light || '-'}` : '';
 
+  const toneSection = S.toneDirective ? '\n\n## 剧本整体定调\n' + S.toneDirective + '\n每个场景 Prompt 都必须符合这个定调方向。' : '';
+
   const userMsg = `请为以下场景生成电影级 AI 场景 Prompt。注意：必须严格还原剧情，不能脱离故事背景。
 
 ${sceneDetail}
 
 整体美术风格：${styleInfo}
+
+${S.toneDirective ? '剧本整体定调：' + S.toneDirective : ''}
 
 要求：
 1. 核心视觉元素（visual）和真实性注意点（realityNote）必须融入 Prompt
@@ -1153,7 +1174,7 @@ ${sceneDetail}
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: GEN_PROMPT_PREFIX + styleInfo },
+          { role: 'system', content: GEN_PROMPT_PREFIX + toneSection + styleInfo },
           { role: 'user', content: userMsg }
         ],
         temperature: 0.3, max_tokens: 2048
@@ -1356,7 +1377,7 @@ ${genderGuide}
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: CHARACTER_PROMPT },
+          { role: 'system', content: CHARACTER_PROMPT + (S.toneDirective ? '\n\n## 剧本整体定调\n' + S.toneDirective + '\n角色设计风格必须符合这个定调方向。' : '') },
           { role: 'user', content: userMsg }
         ],
         temperature: 0.3, max_tokens: 2048
@@ -1394,6 +1415,7 @@ async function quickRefine() {
   const input = document.getElementById('refineInput').value.trim();
   const style = document.getElementById('refineStyle').value.trim() || '电影级超写实';
   const format = document.getElementById('refineFormat').value;
+  const refineTone = document.getElementById('refineTone').value.trim();
   const apiKey = localStorage.getItem('deepseek_api_key');
   if (!apiKey) { toast('请先设置 API Key'); openSettings(); return; }
   if (!input) { toast('请输入场景描述'); return; }
@@ -1414,7 +1436,7 @@ async function quickRefine() {
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: REFINE_PROMPT + '\n\n## 用户选择的风格\n' + style + '\n\n## 输出格式适配\n' + (formatGuide[format] || '') },
+          { role: 'system', content: REFINE_PROMPT + '\n\n## 用户选择的风格\n' + style + '\n\n## 输出格式适配\n' + (formatGuide[format] || '') + (refineTone ? '\n\n## 整体定调\n' + refineTone : '') },
           { role: 'user', content: input }
         ],
         temperature: 0.5, max_tokens: 2048
