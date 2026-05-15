@@ -604,19 +604,39 @@ async function extractScenes() {
             : EXTRACT_PROMPT },
           { role: 'user', content: script }
         ],
-        temperature: 0.3, max_tokens: 4096
+        temperature: 0.3, max_tokens: 8192
       })
     });
     if (!res.ok) throw new Error('API 错误 (' + res.status + ')');
     const data = await res.json();
     const reply = data.choices[0].message.content;
+    const finishReason = data.choices[0].finish_reason;
 
+    // Parse JSON response
     let result;
     try { result = JSON.parse(reply); } catch {
       const m = reply.match(/```(?:json)?\s*([\s\S]*?)```/);
-      result = m ? JSON.parse(m[1]) : null;
+      if (m) {
+        try { result = JSON.parse(m[1]); } catch {}
+      }
     }
-    if (!result || !result.scenes) throw new Error('AI 返回格式异常');
+
+    // Try to fix truncated JSON (cut off by max_tokens)
+    if (!result && finishReason === 'length') {
+      try {
+        const opens = (reply.match(/\{/g) || []).length;
+        const closes = (reply.match(/\}/g) || []).length;
+        if (opens > closes) {
+          const tail = reply.trimEnd().replace(/,\s*$/, '');
+          result = JSON.parse(tail + '\n}'.repeat(opens - closes));
+        }
+      } catch {}
+    }
+
+    if (!result || !result.scenes) {
+      const snippet = reply.slice(-200);
+      throw new Error('AI 返回格式异常（响应截断？' + (finishReason === 'length' ? '是' : '否') + '）…' + snippet);
+    }
 
     S.scenes = result.scenes.filter(s => s.generate !== false);
     S.characters = result.characters || [];
