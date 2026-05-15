@@ -138,6 +138,25 @@
     .copy-btn:active { opacity: 0.8; }
     .copy-btn.copied { background: var(--success); border-color: var(--success); }
 
+    /* Table buttons */
+    .tbl-btn { background:none; border:none; cursor:pointer; font-size:14px; padding:2px 4px; border-radius:4px; color:var(--text-secondary); }
+    .tbl-btn:active { background:var(--border); }
+    .tbl-del:active { color:var(--danger); }
+    .add-btn {
+      width:100%; padding:10px; border:1px dashed var(--border); border-radius:10px;
+      background:transparent; color:var(--text-secondary); font-size:13px; cursor:pointer; text-align:center; margin-bottom:12px;
+    }
+    .add-btn:active { background:var(--surface); }
+
+    /* Editable prompt textarea */
+    .prompt-input {
+      width:100%; min-height:180px; padding:14px; border:1px solid var(--border); border-radius:10px;
+      font-size:13px; line-height:1.8; outline:none; background:var(--surface); color:var(--text);
+      font-family:inherit; resize:vertical;
+    }
+    .prompt-input:focus { border-color:var(--primary); }
+    #promptResultWrap { display:none; margin:12px 0; }
+
     /* Progress */
     .progress-bar {
       height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 16px; overflow: hidden;
@@ -219,14 +238,57 @@
       <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
       <div id="currentSceneCard"></div>
       <button class="btn-primary" id="genPromptBtn">🎬 生成此场景 Prompt</button>
-      <div class="prompt-result" id="promptResult"></div>
-      <button class="copy-btn" id="copyPromptBtn">📋 复制 Prompt</button>
+      <div id="promptResultWrap">
+        <textarea class="prompt-input" id="promptResult" placeholder="Prompt 将在这里生成，你也可以直接编辑修改..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="copy-btn" id="copyPromptBtn">📋 复制 Prompt</button>
+          <button class="btn-secondary" id="updatePromptBtn" style="flex:1;display:none" onclick="saveEditedPrompt()">💾 保存修改</button>
+        </div>
+      </div>
       <div class="btn-row" id="navBtns" style="display:none">
         <button class="btn-secondary" onclick="goStep(2)">← 场景清单</button>
         <button class="btn-primary" id="nextSceneBtn">下一个场景 →</button>
       </div>
     </div>
   </main>
+</div>
+
+<!-- Scene Edit Modal -->
+<div class="modal" id="sceneEditModal">
+  <div class="modal-content">
+    <h2 id="sceneEditTitle">✏️ 编辑场景</h2>
+    <input type="hidden" id="editIdx">
+    <div class="form-group">
+      <label>场景名称</label>
+      <input id="editName" placeholder="如：暴雨夜的废弃矿井入口">
+    </div>
+    <div class="inline-row">
+      <div class="form-group" style="flex:1">
+        <label>时间</label>
+        <input id="editTime" placeholder="如：夜晚">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>地点</label>
+        <input id="editLocation" placeholder="如：矿井入口">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>场景状态</label>
+      <input id="editState" placeholder="如：暴雨状态、废弃状态">
+    </div>
+    <div class="form-group">
+      <label>核心视觉元素</label>
+      <input id="editVisual" placeholder="如：生锈铁栅栏、矿灯、警示牌">
+    </div>
+    <div class="form-group">
+      <label>真实性注意点</label>
+      <input id="editReality" placeholder="如：注意危险空间阻隔">
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="document.getElementById('sceneEditModal').classList.remove('open')" style="flex:1">取消</button>
+      <button class="btn-primary" onclick="saveSceneEdit()" style="flex:2">保存</button>
+    </div>
+  </div>
 </div>
 
 <!-- Settings Modal -->
@@ -265,14 +327,25 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.getElementById('settingsBtn').onclick = openSettings;
   document.getElementById('settingsModal').onclick = (e) => { if (e.target === e.currentTarget) closeSettings(); };
+  document.getElementById('sceneEditModal').onclick = (e) => { if (e.target === e.currentTarget) document.getElementById('sceneEditModal').classList.remove('open'); };
   document.getElementById('extractBtn').onclick = extractScenes;
   document.getElementById('confirmBtn').onclick = startGeneration;
   document.getElementById('genPromptBtn').onclick = generateCurrentPrompt;
   document.getElementById('nextSceneBtn').onclick = nextScene;
-  document.getElementById('copyPromptBtn').onclick = copyPrompt;
+  document.getElementById('copyPromptBtn').onclick = copyPrompt; // already in HTML
 
   // Format selector (hidden in step 3)
   if (!localStorage.getItem('deepseek_api_key')) setTimeout(openSettings, 500);
+
+  // Prompt edit detection - show save button when user modifies generated prompt
+  document.getElementById('promptResult').oninput = function() {
+    const idx = S.currentIdx;
+    if (S.generated[idx] && this.value !== S.generated[idx]) {
+      document.getElementById('updatePromptBtn').style.display = '';
+    } else {
+      document.getElementById('updatePromptBtn').style.display = 'none';
+    }
+  };
 });
 
 // ===== Navigation =====
@@ -402,27 +475,34 @@ function renderSceneList() {
     document.getElementById('artStyleBox').innerHTML = '';
   }
 
-  // Scene table
+  // Scene table with edit/delete buttons
   const sc = S.scenes;
   let html = '<table class="scene-table"><thead><tr>' +
-    '<th class="check-col">#</th><th>场景名称</th><th>时间</th><th>状态</th></tr></thead><tbody>';
-  sc.forEach(s => {
+    '<th class="check-col">#</th><th>场景名称</th><th>时间</th><th>状态</th><th style="width:50px">操作</th></tr></thead><tbody>';
+  sc.forEach((s, i) => {
     html += '<tr>' +
       '<td class="check-col">' + s.id + '</td>' +
       '<td><strong>' + esc(s.name) + '</strong><br><span style="font-size:11px;color:var(--text-secondary)">' + esc(s.location || '') + '</span></td>' +
       '<td>' + esc(s.time || '-') + '</td>' +
       '<td><span class="badge-state">' + esc(s.state || '基础') + '</span></td>' +
-      '</tr>';
+      '<td style="text-align:center;white-space:nowrap">' +
+      '<button class="tbl-btn" onclick="openSceneEdit(' + i + ')" title="编辑">✏️</button>' +
+      '<button class="tbl-btn tbl-del" onclick="deleteScene(' + i + ')" title="删除">🗑️</button>' +
+      '</td></tr>';
   });
   html += '</tbody></table>';
 
   // Extra detail for each scene
   html += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:0 4px;">';
-  sc.forEach(s => {
-    html += '<div style="margin-bottom:6px;"><strong>场次' + s.id + '：</strong>' + esc(s.visual || '') +
-      (s.realityNote ? ' <span style="color:var(--warning)">⚠️ ' + esc(s.realityNote) + '</span>' : '') + '</div>';
+  sc.forEach((s, i) => {
+    html += '<div style="margin-bottom:4px;"><strong>场次' + s.id + '：</strong>' + esc(s.visual || '') +
+      (s.realityNote ? ' <span style="color:var(--warning)">⚠️ ' + esc(s.realityNote) + '</span>' : '') +
+      ' <button class="tbl-btn" onclick="openSceneEdit(' + i + ')" style="font-size:11px">✏️</button></div>';
   });
   html += '</div>';
+
+  // Add scene button
+  html += '<button class="add-btn" onclick="openSceneEdit(-1)">+ 添加场景</button>';
 
   document.getElementById('sceneTableWrap').innerHTML = html;
 
@@ -435,6 +515,58 @@ function renderSceneList() {
   }
 
   document.getElementById('step2Actions').style.display = 'flex';
+}
+
+// ===== Scene Edit Functions =====
+function openSceneEdit(idx) {
+  const isNew = idx === -1;
+  const scene = isNew ? {} : S.scenes[idx];
+  S._editIdx = idx;
+
+  document.getElementById('editIdx').value = isNew ? '' : (S.scenes[idx].id || '');
+  document.getElementById('editName').value = scene.name || '';
+  document.getElementById('editTime').value = scene.time || '';
+  document.getElementById('editLocation').value = scene.location || '';
+  document.getElementById('editState').value = scene.state || '基础';
+  document.getElementById('editVisual').value = scene.visual || '';
+  document.getElementById('editReality').value = scene.realityNote || '';
+
+  document.getElementById('sceneEditModal').classList.add('open');
+}
+
+function saveSceneEdit() {
+  const idx = S._editIdx;
+  const data = {
+    id: parseInt(document.getElementById('editIdx').value) || (S.scenes.length > 0 ? Math.max(...S.scenes.map(s => s.id)) + 1 : 1),
+    name: document.getElementById('editName').value.trim(),
+    time: document.getElementById('editTime').value.trim(),
+    location: document.getElementById('editLocation').value.trim(),
+    state: document.getElementById('editState').value.trim() || '基础',
+    visual: document.getElementById('editVisual').value.trim(),
+    realityNote: document.getElementById('editReality').value.trim(),
+    generate: true
+  };
+
+  if (!data.name) { toast('请输入场景名称'); return; }
+
+  if (idx === -1 || idx >= S.scenes.length) {
+    S.scenes.push(data);
+  } else {
+    S.scenes[idx] = data;
+  }
+  S.totalScenes = S.scenes.length;
+
+  document.getElementById('sceneEditModal').classList.remove('open');
+  renderSceneList();
+  toast('场景已保存');
+}
+
+function deleteScene(idx) {
+  if (S.scenes.length <= 1) { toast('至少保留一个场景'); return; }
+  S.scenes.splice(idx, 1);
+  S.totalScenes = S.scenes.length;
+  renderSceneList();
+  toast('场景已删除');
 }
 
 // ===== Phase 2: Start Generation =====
@@ -454,10 +586,13 @@ function showCurrentScene() {
   const pct = ((idx) / S.totalScenes) * 100;
   document.getElementById('progressFill').style.width = pct + '%';
 
-  // Scene card
+  // Scene card with edit button
   document.getElementById('currentSceneCard').innerHTML =
     '<div class="scene-card">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
     '<div class="scene-title">🎬 场次' + sc.id + '：' + esc(sc.name) + '</div>' +
+    '<button class="tbl-btn" onclick="openSceneEdit(' + idx + ')" title="编辑场景信息">✏️</button>' +
+    '</div>' +
     '<div class="scene-meta">' +
     '<span>⏰ ' + esc(sc.time || '-') + '</span>' +
     '<span>📍 ' + esc(sc.location || '-') + '</span>' +
@@ -468,18 +603,12 @@ function showCurrentScene() {
     '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">场景 ' + (idx+1) + ' / ' + S.totalScenes + '</div>';
 
   // Reset result area
-  document.getElementById('promptResult').classList.remove('show');
-  document.getElementById('promptResult').textContent = '';
-  document.getElementById('copyPromptBtn').classList.remove('show');
-  document.getElementById('copyPromptBtn').classList.remove('copied');
-  document.getElementById('copyPromptBtn').textContent = '📋 复制 Prompt';
-  document.getElementById('genPromptBtn').style.display = '';
-  document.getElementById('navBtns').style.display = 'none';
+  resetPromptArea();
 
   // If already generated for this scene, show it
   if (S.generated[idx]) {
-    document.getElementById('promptResult').textContent = S.generated[idx];
-    document.getElementById('promptResult').classList.add('show');
+    document.getElementById('promptResult').value = S.generated[idx];
+    document.getElementById('promptResultWrap').style.display = 'block';
     document.getElementById('copyPromptBtn').classList.add('show');
     document.getElementById('genPromptBtn').style.display = 'none';
     document.getElementById('navBtns').style.display = 'flex';
@@ -565,12 +694,7 @@ const GEN_PROMPT_PREFIX = `你是专业的影视剧本场景分析师、影视�
 async function generateCurrentPrompt() {
   const idx = S.currentIdx;
   if (S.generated[idx]) {
-    // Already generated, show it
-    document.getElementById('promptResult').textContent = S.generated[idx];
-    document.getElementById('promptResult').classList.add('show');
-    document.getElementById('copyPromptBtn').classList.add('show');
-    document.getElementById('genPromptBtn').style.display = 'none';
-    document.getElementById('navBtns').style.display = 'flex';
+    showGeneratedPrompt(idx);
     return;
   }
 
@@ -621,21 +745,45 @@ ${sceneDetail}
 
     S.generated[idx] = prompt;
     S.scenes[idx].previousPrompt = prompt;
-
-    document.getElementById('promptResult').textContent = prompt;
-    document.getElementById('promptResult').classList.add('show');
-    document.getElementById('copyPromptBtn').classList.add('show');
-    btn.style.display = 'none';
-    document.getElementById('navBtns').style.display = 'flex';
-
-    const isLast = idx >= S.totalScenes - 1;
-    document.getElementById('nextSceneBtn').textContent = isLast ? '✅ 全部完成' : '下一个场景 →';
+    showGeneratedPrompt(idx);
 
     toast('Prompt 已生成！');
   } catch (err) {
     toast('生成失败：' + err.message);
   } finally {
     btn.disabled = false; btn.textContent = '🎬 生成此场景 Prompt';
+  }
+}
+
+function showGeneratedPrompt(idx) {
+  document.getElementById('promptResult').value = S.generated[idx];
+  document.getElementById('promptResultWrap').style.display = 'block';
+  document.getElementById('copyPromptBtn').classList.add('show');
+  document.getElementById('updatePromptBtn').style.display = 'none';
+  document.getElementById('genPromptBtn').style.display = 'none';
+  document.getElementById('navBtns').style.display = 'flex';
+  const isLast = idx >= S.totalScenes - 1;
+  document.getElementById('nextSceneBtn').textContent = isLast ? '✅ 全部完成' : '下一个场景 →';
+}
+
+function resetPromptArea() {
+  document.getElementById('promptResult').value = '';
+  document.getElementById('promptResultWrap').style.display = 'none';
+  document.getElementById('copyPromptBtn').classList.remove('show');
+  document.getElementById('copyPromptBtn').classList.remove('copied');
+  document.getElementById('copyPromptBtn').textContent = '📋 复制 Prompt';
+  document.getElementById('updatePromptBtn').style.display = 'none';
+  document.getElementById('genPromptBtn').style.display = '';
+  document.getElementById('navBtns').style.display = 'none';
+}
+
+function saveEditedPrompt() {
+  const idx = S.currentIdx;
+  const val = document.getElementById('promptResult').value.trim();
+  if (val) {
+    S.generated[idx] = val;
+    toast('修改已保存');
+    document.getElementById('updatePromptBtn').style.display = 'none';
   }
 }
 
@@ -654,7 +802,7 @@ function nextScene() {
 }
 
 function copyPrompt() {
-  const text = document.getElementById('promptResult').textContent;
+  const text = document.getElementById('promptResult').value;
   if (!text) return;
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copyPromptBtn');
