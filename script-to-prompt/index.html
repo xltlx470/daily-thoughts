@@ -251,6 +251,7 @@
     <!-- ===== Step 3: Generate One by One ===== -->
     <div class="step-content" data-step="3">
       <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+      <div id="phaseLabel" style="text-align:center;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:8px">🎬 场景 Prompt 生成阶段</div>
       <div id="currentSceneCard"></div>
       <button class="btn-primary" id="genPromptBtn">🎬 生成此场景 Prompt</button>
       <div id="promptResultWrap">
@@ -300,40 +301,76 @@
   </main>
 </div>
 
-<!-- Scene Edit Modal -->
-<div class="modal" id="sceneEditModal">
+<!-- Scene / Character Edit Modal -->
+<div class="modal" id="editModal">
   <div class="modal-content">
-    <h2 id="sceneEditTitle">✏️ 编辑场景</h2>
+    <h2 id="editTitle">✏️ 编辑</h2>
     <input type="hidden" id="editIdx">
-    <div class="form-group">
-      <label>场景名称</label>
-      <input id="editName" placeholder="如：暴雨夜的废弃矿井入口">
-    </div>
-    <div class="inline-row">
-      <div class="form-group" style="flex:1">
-        <label>时间</label>
-        <input id="editTime" placeholder="如：夜晚">
+    <input type="hidden" id="editType" value="scene">
+
+    <!-- Scene fields -->
+    <div id="editSceneFields">
+      <div class="form-group">
+        <label>场景名称</label>
+        <input id="editName" placeholder="如：暴雨夜的废弃矿井入口">
       </div>
-      <div class="form-group" style="flex:1">
-        <label>地点</label>
-        <input id="editLocation" placeholder="如：矿井入口">
+      <div class="inline-row">
+        <div class="form-group" style="flex:1">
+          <label>时间</label>
+          <input id="editTime" placeholder="如：夜晚">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>地点</label>
+          <input id="editLocation" placeholder="如：矿井入口">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>场景状态</label>
+        <input id="editState" placeholder="如：暴雨状态、废弃状态">
+      </div>
+      <div class="form-group">
+        <label>核心视觉元素</label>
+        <input id="editVisual" placeholder="如：生锈铁栅栏、矿灯、警示牌">
+      </div>
+      <div class="form-group">
+        <label>真实性注意点</label>
+        <input id="editReality" placeholder="如：注意危险空间阻隔">
       </div>
     </div>
-    <div class="form-group">
-      <label>场景状态</label>
-      <input id="editState" placeholder="如：暴雨状态、废弃状态">
+
+    <!-- Character fields -->
+    <div id="editCharFields" style="display:none">
+      <div class="form-group">
+        <label>角色名称</label>
+        <input id="editCharName" placeholder="如：张队长">
+      </div>
+      <div class="inline-row">
+        <div class="form-group" style="flex:1">
+          <label>性别</label>
+          <input id="editCharGender" placeholder="男/女">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>年龄</label>
+          <input id="editCharAge" placeholder="如：35岁、青年">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>外貌特征</label>
+        <input id="editCharAppearance" placeholder="如：身高180cm，短发，右脸疤痕">
+      </div>
+      <div class="form-group">
+        <label>服装特征</label>
+        <input id="editCharClothing" placeholder="如：黑色战术背心，军裤">
+      </div>
+      <div class="form-group">
+        <label>关键特征</label>
+        <input id="editCharFeatures" placeholder="如：眼神凶狠，气质硬朗">
+      </div>
     </div>
-    <div class="form-group">
-      <label>核心视觉元素</label>
-      <input id="editVisual" placeholder="如：生锈铁栅栏、矿灯、警示牌">
-    </div>
-    <div class="form-group">
-      <label>真实性注意点</label>
-      <input id="editReality" placeholder="如：注意危险空间阻隔">
-    </div>
-    <div class="btn-row">
-      <button class="btn-secondary" onclick="document.getElementById('sceneEditModal').classList.remove('open')" style="flex:1">取消</button>
-      <button class="btn-primary" onclick="saveSceneEdit()" style="flex:2">保存</button>
+
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn-secondary" onclick="document.getElementById('editModal').classList.remove('open')" style="flex:1">取消</button>
+      <button class="btn-primary" id="saveEditBtn" onclick="saveEdit()" style="flex:2">保存</button>
     </div>
   </div>
 </div>
@@ -356,11 +393,16 @@
 const S = {
   script: '',
   scenes: [],
+  characters: [],
   artStyle: null,
   notes: '',
-  currentIdx: 0,  // which scene we're generating
+  currentIdx: 0,
   totalScenes: 0,
   generated: [],
+  charCurrentIdx: 0,
+  charTotal: 0,
+  charGenerated: [],
+  phase: 'scene', // 'scene' | 'character'
   format: 'midjourney'
 };
 
@@ -374,10 +416,16 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.getElementById('settingsBtn').onclick = openSettings;
   document.getElementById('settingsModal').onclick = (e) => { if (e.target === e.currentTarget) closeSettings(); };
-  document.getElementById('sceneEditModal').onclick = (e) => { if (e.target === e.currentTarget) document.getElementById('sceneEditModal').classList.remove('open'); };
+  document.getElementById('editModal').onclick = (e) => { if (e.target === e.currentTarget) document.getElementById('editModal').classList.remove('open'); };
   document.getElementById('extractBtn').onclick = extractScenes;
   document.getElementById('confirmBtn').onclick = startGeneration;
-  document.getElementById('genPromptBtn').onclick = generateCurrentPrompt;
+  document.getElementById('genPromptBtn').onclick = () => {
+    if (S.phase === 'character') {
+      generateCharacterPrompt();
+    } else {
+      generateCurrentPrompt();
+    }
+  };
   document.getElementById('nextSceneBtn').onclick = nextScene;
   document.getElementById('copyPromptBtn').onclick = copyPrompt;
 
@@ -413,11 +461,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Prompt edit detection - show save button when user modifies generated prompt
   document.getElementById('promptResult').oninput = function() {
-    const idx = S.currentIdx;
-    if (S.generated[idx] && this.value !== S.generated[idx]) {
-      document.getElementById('updatePromptBtn').style.display = '';
+    if (S.phase === 'character') {
+      const idx = S.charCurrentIdx;
+      if (S.charGenerated[idx] && this.value !== S.charGenerated[idx]) {
+        document.getElementById('updatePromptBtn').style.display = '';
+      } else {
+        document.getElementById('updatePromptBtn').style.display = 'none';
+      }
     } else {
-      document.getElementById('updatePromptBtn').style.display = 'none';
+      const idx = S.currentIdx;
+      if (S.generated[idx] && this.value !== S.generated[idx]) {
+        document.getElementById('updatePromptBtn').style.display = '';
+      } else {
+        document.getElementById('updatePromptBtn').style.display = 'none';
+      }
     }
   };
 });
@@ -436,10 +493,15 @@ function goStep(n) {
 }
 
 // ===== Phase 1: Extract Scene List =====
-const EXTRACT_PROMPT = `你是专业的影视剧本场景分析师、影视美术场景设计师、环境概念设计师。
+const EXTRACT_PROMPT = `你是专业的影视剧本场景分析师、影视美术场景设计师、环境概念设计师、角色概念设计师。
 
 ## 任务
-分析用户提供的剧本/剧情/故事梗概，提取出真正需要制作的影视场景清单。
+分析用户提供的剧本/剧情/故事梗概，分别提取出：
+1. 需要制作的影视场景清单（纯场景，不包含人物）
+2. 需要制作的角色概念设计清单（三视图+大头照）
+
+## 核心原则
+场景和人物严格分离——场景清单中只包含环境/空间/场景，人物角色单独提取到 characters 数组中。
 
 ## 场景识别规则
 只有具备明确空间属性的内容才能识别为场景。
@@ -454,6 +516,13 @@ const EXTRACT_PROMPT = `你是专业的影视剧本场景分析师、影视美�
 ## 场景状态规则
 同一场景有明显变化时必须识别不同状态（如：基础状态、夜晚、暴雨、废弃、坍塌、火灾等）。
 基础状态不能默认画成变化后状态。
+
+## 场景 Prompt 人物处理规则
+场景清单中不包含任何人物描写。场景 Prompt 中人物只能作为远景剪影、模糊人影、比例参考，不描写五官服装。
+
+## 角色提取规则
+从剧本中提取出有明确描述或需要出场的角色，每个角色一条。
+包括：角色姓名/称呼、性别、年龄、外貌特征、服装特征、关键特征。
 
 ## 输出要求
 以 JSON 格式返回（只返回 JSON，不要其他文字）：
@@ -478,12 +547,25 @@ const EXTRACT_PROMPT = `你是专业的影视剧本场景分析师、影视美�
       "generate": true
     }
   ],
+  "characters": [
+    {
+      "id": 1,
+      "name": "角色名",
+      "gender": "男/女",
+      "age": "年龄段",
+      "appearance": "外貌特征描述",
+      "clothing": "服装特征",
+      "features": "关键特征"
+    }
+  ],
   "notes": "备注"
 }
 
 注意：
-- scenes 列出所有需要制作的场景，每个场景一条
+- scenes 只包含场景（环境/空间），不包含人物
+- characters 单独列出需要制作角色概念图的角色
 - 同场景不同状态分两条列出但 id 连续
+- characters 列出所有需要出场的角色，如果剧本中没有明确角色可留空数组
 - generate 默认 true
 - 描述用中文，简洁精准`;
 
@@ -519,10 +601,14 @@ async function extractScenes() {
     if (!result || !result.scenes) throw new Error('AI 返回格式异常');
 
     S.scenes = result.scenes.filter(s => s.generate !== false);
+    S.characters = result.characters || [];
     S.artStyle = result.artStyle;
     S.notes = result.notes || '';
     S.totalScenes = S.scenes.length;
     S.generated = [];
+    S.charTotal = S.characters.length;
+    S.charGenerated = [];
+    S.phase = 'scene';
 
     renderSceneList();
     goStep(2);
@@ -580,6 +666,41 @@ function renderSceneList() {
 
   document.getElementById('sceneTableWrap').innerHTML = html;
 
+  // ===== Character List =====
+  const chars = S.characters;
+  let charHtml = '<div style="margin-top:16px"><h3 style="font-size:14px;font-weight:600;margin-bottom:8px;color:var(--primary-light)">👤 角色概念设计清单</h3>';
+  if (chars.length === 0) {
+    charHtml += '<div class="empty-state" style="padding:20px">暂无角色</div>';
+  } else {
+    charHtml += '<table class="scene-table"><thead><tr>' +
+      '<th class="check-col">#</th><th>角色</th><th>性别</th><th>年龄</th><th style="width:50px">操作</th></tr></thead><tbody>';
+    chars.forEach((c, i) => {
+      charHtml += '<tr>' +
+        '<td class="check-col">' + c.id + '</td>' +
+        '<td><strong>' + esc(c.name) + '</strong></td>' +
+        '<td>' + esc(c.gender || '-') + '</td>' +
+        '<td>' + esc(c.age || '-') + '</td>' +
+        '<td style="text-align:center;white-space:nowrap">' +
+        '<button class="tbl-btn" onclick="openCharacterEdit(' + i + ')" title="编辑">✏️</button>' +
+        '<button class="tbl-btn tbl-del" onclick="deleteCharacter(' + i + ')" title="删除">🗑️</button>' +
+        '</td></tr>';
+    });
+    charHtml += '</tbody></table>';
+
+    // Character detail
+    charHtml += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;padding:0 4px;">';
+    chars.forEach((c, i) => {
+      charHtml += '<div style="margin-bottom:4px;"><strong>' + esc(c.name) + '：</strong>' +
+        esc(c.appearance || '') + ' | ' + esc(c.clothing || '') +
+        (c.features ? ' | ★ ' + esc(c.features) : '') +
+        ' <button class="tbl-btn" onclick="openCharacterEdit(' + i + ')" style="font-size:11px">✏️</button></div>';
+    });
+    charHtml += '</div>';
+  }
+  charHtml += '<button class="add-btn" onclick="openCharacterEdit(-1)">+ 添加角色</button></div>';
+
+  document.getElementById('sceneTableWrap').innerHTML += charHtml;
+
   // Notes
   const nb = document.getElementById('notesBox');
   if (S.notes) {
@@ -591,8 +712,13 @@ function renderSceneList() {
   document.getElementById('step2Actions').style.display = 'flex';
 }
 
-// ===== Scene Edit Functions =====
+// ===== Scene / Character Edit Functions =====
 function openSceneEdit(idx) {
+  document.getElementById('editType').value = 'scene';
+  document.getElementById('editTitle').textContent = '✏️ 编辑场景';
+  document.getElementById('editSceneFields').style.display = '';
+  document.getElementById('editCharFields').style.display = 'none';
+
   const isNew = idx === -1;
   const scene = isNew ? {} : S.scenes[idx];
   S._editIdx = idx;
@@ -605,34 +731,74 @@ function openSceneEdit(idx) {
   document.getElementById('editVisual').value = scene.visual || '';
   document.getElementById('editReality').value = scene.realityNote || '';
 
-  document.getElementById('sceneEditModal').classList.add('open');
+  document.getElementById('editModal').classList.add('open');
 }
 
-function saveSceneEdit() {
+function openCharacterEdit(idx) {
+  document.getElementById('editType').value = 'character';
+  document.getElementById('editTitle').textContent = '✏️ 编辑角色';
+  document.getElementById('editSceneFields').style.display = 'none';
+  document.getElementById('editCharFields').style.display = '';
+
+  const isNew = idx === -1;
+  const ch = isNew ? {} : S.characters[idx];
+  S._editIdx = idx;
+
+  document.getElementById('editIdx').value = isNew ? '' : (S.characters[idx].id || '');
+  document.getElementById('editCharName').value = ch.name || '';
+  document.getElementById('editCharGender').value = ch.gender || '';
+  document.getElementById('editCharAge').value = ch.age || '';
+  document.getElementById('editCharAppearance').value = ch.appearance || '';
+  document.getElementById('editCharClothing').value = ch.clothing || '';
+  document.getElementById('editCharFeatures').value = ch.features || '';
+
+  document.getElementById('editModal').classList.add('open');
+}
+
+function saveEdit() {
+  const type = document.getElementById('editType').value;
   const idx = S._editIdx;
-  const data = {
-    id: parseInt(document.getElementById('editIdx').value) || (S.scenes.length > 0 ? Math.max(...S.scenes.map(s => s.id)) + 1 : 1),
-    name: document.getElementById('editName').value.trim(),
-    time: document.getElementById('editTime').value.trim(),
-    location: document.getElementById('editLocation').value.trim(),
-    state: document.getElementById('editState').value.trim() || '基础',
-    visual: document.getElementById('editVisual').value.trim(),
-    realityNote: document.getElementById('editReality').value.trim(),
-    generate: true
-  };
 
-  if (!data.name) { toast('请输入场景名称'); return; }
-
-  if (idx === -1 || idx >= S.scenes.length) {
-    S.scenes.push(data);
+  if (type === 'scene') {
+    const data = {
+      id: parseInt(document.getElementById('editIdx').value) || (S.scenes.length > 0 ? Math.max(...S.scenes.map(s => s.id)) + 1 : 1),
+      name: document.getElementById('editName').value.trim(),
+      time: document.getElementById('editTime').value.trim(),
+      location: document.getElementById('editLocation').value.trim(),
+      state: document.getElementById('editState').value.trim() || '基础',
+      visual: document.getElementById('editVisual').value.trim(),
+      realityNote: document.getElementById('editReality').value.trim(),
+      generate: true
+    };
+    if (!data.name) { toast('请输入场景名称'); return; }
+    if (idx === -1 || idx >= S.scenes.length) {
+      S.scenes.push(data);
+    } else {
+      S.scenes[idx] = data;
+    }
+    S.totalScenes = S.scenes.length;
   } else {
-    S.scenes[idx] = data;
+    const data = {
+      id: parseInt(document.getElementById('editIdx').value) || (S.characters.length > 0 ? Math.max(...S.characters.map(c => c.id)) + 1 : 1),
+      name: document.getElementById('editCharName').value.trim(),
+      gender: document.getElementById('editCharGender').value.trim(),
+      age: document.getElementById('editCharAge').value.trim(),
+      appearance: document.getElementById('editCharAppearance').value.trim(),
+      clothing: document.getElementById('editCharClothing').value.trim(),
+      features: document.getElementById('editCharFeatures').value.trim()
+    };
+    if (!data.name) { toast('请输入角色名称'); return; }
+    if (idx === -1 || idx >= S.characters.length) {
+      S.characters.push(data);
+    } else {
+      S.characters[idx] = data;
+    }
+    S.charTotal = S.characters.length;
   }
-  S.totalScenes = S.scenes.length;
 
-  document.getElementById('sceneEditModal').classList.remove('open');
+  document.getElementById('editModal').classList.remove('open');
   renderSceneList();
-  toast('场景已保存');
+  toast('已保存');
 }
 
 function deleteScene(idx) {
@@ -643,15 +809,36 @@ function deleteScene(idx) {
   toast('场景已删除');
 }
 
+function deleteCharacter(idx) {
+  S.characters.splice(idx, 1);
+  S.charTotal = S.characters.length;
+  renderSceneList();
+  toast('角色已删除');
+}
+
 // ===== Phase 2: Start Generation =====
 function startGeneration() {
   S.currentIdx = 0;
   S.generated = [];
+  S.charCurrentIdx = 0;
+  S.charGenerated = [];
+  S.phase = 'scene';
   goStep(3);
-  showCurrentScene();
+  if (S.totalScenes > 0) {
+    showCurrentScene();
+  } else if (S.charTotal > 0) {
+    switchToCharacterPhase();
+  }
 }
 
 function showCurrentScene() {
+  if (S.phase === 'character') {
+    showCurrentCharacter();
+    return;
+  }
+
+  document.getElementById('phaseLabel').textContent = '🎬 场景 Prompt 生成阶段';
+
   const idx = S.currentIdx;
   const sc = S.scenes[idx];
   if (!sc) return;
@@ -687,10 +874,65 @@ function showCurrentScene() {
     document.getElementById('genPromptBtn').style.display = 'none';
     document.getElementById('navBtns').style.display = 'flex';
     document.getElementById('nextSceneBtn').textContent =
-      idx < S.totalScenes - 1 ? '下一个场景 →' : '✅ 全部完成';
+      idx < S.totalScenes - 1 ? '下一个场景 →' : (S.charTotal > 0 ? '→ 生成角色 Prompt' : '✅ 全部完成');
   }
 
   document.querySelector('main').scrollTop = 0;
+}
+
+function showCurrentCharacter() {
+  document.getElementById('phaseLabel').textContent = '👤 角色概念设计 Prompt 生成阶段（三视图+大头照）';
+  const idx = S.charCurrentIdx;
+  const ch = S.characters[idx];
+  if (!ch) return;
+
+  // Progress (scenes full + character progress)
+  const totalItems = S.totalScenes + S.charTotal;
+  const doneItems = S.totalScenes + idx;
+  const pct = (doneItems / totalItems) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+
+  // Character card with edit button
+  document.getElementById('currentSceneCard').innerHTML =
+    '<div class="scene-card" style="border-color:var(--success)">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+    '<div class="scene-title" style="color:var(--success)">👤 ' + esc(ch.name) + '</div>' +
+    '<button class="tbl-btn" onclick="openCharacterEdit(' + idx + ')" title="编辑角色信息">✏️</button>' +
+    '</div>' +
+    '<div class="scene-meta">' +
+    '<span>⚤ ' + esc(ch.gender || '-') + '</span>' +
+    '<span>🎂 ' + esc(ch.age || '-') + '</span>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">' +
+    '<span>外貌：' + esc(ch.appearance || '-') + '</span></div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">' +
+    '<span>服装：' + esc(ch.clothing || '-') + '</span></div>' +
+    (ch.features ? '<div style="font-size:12px;color:var(--warning)">★ ' + esc(ch.features) + '</div>' : '') +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">角色 ' + (idx+1) + ' / ' + S.charTotal + '（三视图+大头照）</div>';
+
+  // Reset result area
+  resetPromptArea();
+  document.getElementById('genPromptBtn').textContent = '👤 生成此角色 Prompt';
+
+  // If already generated for this character, show it
+  if (S.charGenerated[idx]) {
+    document.getElementById('promptResult').value = S.charGenerated[idx];
+    document.getElementById('promptResultWrap').style.display = 'block';
+    document.getElementById('copyPromptBtn').classList.add('show');
+    document.getElementById('genPromptBtn').style.display = 'none';
+    document.getElementById('navBtns').style.display = 'flex';
+    document.getElementById('nextSceneBtn').textContent =
+      idx < S.charTotal - 1 ? '下一个角色 →' : '✅ 全部完成';
+  }
+
+  document.querySelector('main').scrollTop = 0;
+}
+
+function switchToCharacterPhase() {
+  S.phase = 'character';
+  S.charCurrentIdx = 0;
+  showCurrentCharacter();
 }
 
 // ===== Generate One Prompt =====
@@ -747,7 +989,8 @@ const GEN_PROMPT_PREFIX = `你是专业的影视剧本场景分析师、影视�
 医院：剥落墙皮、旧瓷砖、冷白灯、走廊阴影、生锈病床。
 
 ## 人物处理
-场景 Prompt 中人物只能作为远景剪影、模糊人影、比例参考。不能描写五官、服装细节。
+本流程中角色与场景严格分离——角色有独立的三视图+大头照生成流程。
+场景 Prompt 中不得出现具体人物描写。人物只能作为远景剪影、模糊人影、比例参考。不能描写五官、服装细节。
 
 ## 最终执行原则
 1. 先理解场景，再写 Prompt
@@ -901,21 +1144,47 @@ function resetPromptArea() {
   document.getElementById('copyPromptBtn').classList.remove('copied');
   document.getElementById('copyPromptBtn').textContent = '📋 复制 Prompt';
   document.getElementById('updatePromptBtn').style.display = 'none';
-  document.getElementById('genPromptBtn').style.display = '';
+  resetGenBtnText();
   document.getElementById('navBtns').style.display = 'none';
 }
 
-function saveEditedPrompt() {
-  const idx = S.currentIdx;
-  const val = document.getElementById('promptResult').value.trim();
-  if (val) {
-    S.generated[idx] = val;
-    toast('修改已保存');
-    document.getElementById('updatePromptBtn').style.display = 'none';
+function resetGenBtnText() {
+  const btn = document.getElementById('genPromptBtn');
+  if (S.phase === 'character') {
+    btn.textContent = '👤 生成此角色 Prompt';
+  } else {
+    btn.textContent = '🎬 生成此场景 Prompt';
   }
 }
 
+function saveEditedPrompt() {
+  const val = document.getElementById('promptResult').value.trim();
+  if (!val) return;
+  if (S.phase === 'character') {
+    S.charGenerated[S.charCurrentIdx] = val;
+  } else {
+    S.generated[S.currentIdx] = val;
+  }
+  toast('修改已保存');
+  document.getElementById('updatePromptBtn').style.display = 'none';
+}
+
 function nextScene() {
+  if (S.phase === 'character') {
+    if (S.charCurrentIdx < S.charTotal - 1) {
+      S.charCurrentIdx++;
+      showCurrentCharacter();
+      document.getElementById('genPromptBtn').textContent = '👤 生成此角色 Prompt';
+      document.getElementById('genPromptBtn').style.display = '';
+      document.getElementById('navBtns').style.display = 'none';
+      document.getElementById('promptResult').classList.remove('show');
+      document.getElementById('copyPromptBtn').classList.remove('show');
+    } else {
+      toast('🎉 全部角色 Prompt 已生成完成！');
+    }
+    return;
+  }
+
   if (S.currentIdx < S.totalScenes - 1) {
     S.currentIdx++;
     showCurrentScene();
@@ -923,8 +1192,14 @@ function nextScene() {
     document.getElementById('navBtns').style.display = 'none';
     document.getElementById('promptResult').classList.remove('show');
     document.getElementById('copyPromptBtn').classList.remove('show');
+  } else if (S.charTotal > 0) {
+    // Transition to character phase
+    switchToCharacterPhase();
+    document.getElementById('genPromptBtn').style.display = '';
+    document.getElementById('navBtns').style.display = 'none';
+    document.getElementById('promptResult').classList.remove('show');
+    document.getElementById('copyPromptBtn').classList.remove('show');
   } else {
-    // All done
     toast('🎉 全部场景 Prompt 已生成完成！');
   }
 }
@@ -946,6 +1221,99 @@ function copyPrompt() {
     ta.select(); document.execCommand('copy'); ta.remove();
     toast('已复制');
   });
+}
+
+// ===== Character Prompt Generation =====
+const CHARACTER_PROMPT = `你是专业的影视角色概念设计师、AI 角色概念设计 Prompt 设计师。
+
+## 任务
+根据角色的文字描述，生成一张"三视图 + 大头照"整合在一张图内的角色概念设计 Prompt。
+
+## 核心要求
+- 一张图中同时包含：正面全身、侧面全身、背面全身（三视图）+ 脸部大头照特写
+- 文字布局：三视图在下方左/中/右排列，大头照在上方或右上角
+- 真人写实风格（photorealistic），电影级角色概念设定图
+
+## Prompt 结构
+1. 画幅与风格定义（竖版或方图，适合角色概念设计展示）
+2. 版面布局说明：一张图中包含三视图和大头照
+3. 角色外貌描写（面部特征、发型、体型）
+4. 服装细节（材质、颜色、款式）
+5. 关键特征强化
+6. 光影与质感关键词
+
+## 输出规则
+- 只输出一段完整中文 Prompt，可直接复制粘贴使用
+- 不要输出标题、说明、分析过程
+- 不需要放在代码块中
+
+## 风格参考
+横版3:2或竖版3:4，电影级超写实真人角色概念设计，白底或中性灰背景，柔和棚拍灯，真实皮肤质感，毛孔细节，自然毛发，8K，RAW电影质感，角色概念设定图品质`;
+
+async function generateCharacterPrompt() {
+  const idx = S.charCurrentIdx;
+  if (S.charGenerated[idx]) {
+    showGeneratedCharPrompt(idx);
+    return;
+  }
+
+  const apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) { toast('请先设置 API Key'); openSettings(); return; }
+
+  const ch = S.characters[idx];
+  const btn = document.getElementById('genPromptBtn');
+  btn.disabled = true; btn.textContent = '生成角色中...';
+
+  const userMsg = `请为以下角色生成"三视图+大头照"角色概念设计 Prompt：
+
+角色信息：
+- 名称：${ch.name}
+- 性别：${ch.gender || '-'}
+- 年龄：${ch.age || '-'}
+- 外貌特征：${ch.appearance || '-'}
+- 服装特征：${ch.clothing || '-'}
+- 关键特征：${ch.features || '-'}
+
+请生成一张包含正面/侧面/背面三视图和脸部大头照特写的角色概念设计图 Prompt。`;
+
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: CHARACTER_PROMPT },
+          { role: 'user', content: userMsg }
+        ],
+        temperature: 0.5, max_tokens: 2048
+      })
+    });
+    if (!res.ok) throw new Error('API 错误 (' + res.status + ')');
+    const data = await res.json();
+    const prompt = data.choices[0].message.content.trim();
+
+    S.charGenerated[idx] = prompt;
+    showGeneratedCharPrompt(idx);
+    toast('角色 Prompt 已生成！');
+  } catch (err) {
+    toast('生成失败：' + err.message);
+  } finally {
+    btn.disabled = false;
+    if (S.phase === 'character') btn.textContent = '👤 生成此角色 Prompt';
+    else btn.textContent = '🎬 生成此场景 Prompt';
+  }
+}
+
+function showGeneratedCharPrompt(idx) {
+  document.getElementById('promptResult').value = S.charGenerated[idx];
+  document.getElementById('promptResultWrap').style.display = 'block';
+  document.getElementById('copyPromptBtn').classList.add('show');
+  document.getElementById('updatePromptBtn').style.display = 'none';
+  document.getElementById('genPromptBtn').style.display = 'none';
+  document.getElementById('navBtns').style.display = 'flex';
+  const isLast = idx >= S.charTotal - 1;
+  document.getElementById('nextSceneBtn').textContent = isLast ? '✅ 全部完成' : '下一个角色 →';
 }
 
 // ===== Quick Refine =====
