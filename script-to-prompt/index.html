@@ -566,16 +566,17 @@ async function generate() {
     'midjourney': `- 使用中文描述
 - 包含构图、光线、镜头等摄影专业知识
 - 末尾加参数如 --ar 16:9 --v 6
-- 例如：深夜办公室，疲惫程序员坐电脑前，屏幕光照亮面部，暖色台灯，伦勃朗布光，85mm定焦，浅景深，青橙色调，电影感 --ar 16:9 --v 6`,
+- 场景示例：深夜办公室，空无一人，电脑屏幕亮着，暖色台灯，窗外城市夜景，伦勃朗布光，85mm定焦，浅景深，青橙色调，电影感 --ar 16:9 --v 6
+- 人物三视图示例：年轻男性正面/侧面/背面三视图，灰色背景，角色设计图，中性表情，服装细节清晰 --ar 16:9 --v 6
+- 人物大头照示例：年轻男性面部特写，蝴蝶光，85mm f/1.4，眼神光，清晰瞳孔细节，柔和背景 --ar 16:9 --v 6`,
     'stable-diffusion': `- 使用中文描述
 - 包含专业摄影知识
-- 正面提示词 ### 负面提示词
-- 例如：masterpiece, best quality, 深夜办公室，疲惫程序员，电脑屏幕光，暖色台灯，电影布光 ### 模糊，失真，低质量`,
+- 正面提示词 ### 负面提示词`,
     'dalle': `- 使用中文自然语言详细描述
 - 包含构图、光线、镜头、色彩等摄影专业知识`
   }[format];
 
-  const systemPrompt = `你是世界顶级的 AI 绘图提示词工程师，同时也是一名资深商业摄影师和电影摄影师。你的专长是将剧本场景转化为极具画面感的专业级绘图提示词。
+  const systemPrompt = `你是世界顶级的 AI 绘图提示词工程师，同时也是一名资深商业摄影师和电影摄影师。
 
 ## 你掌握的摄影专业知识（必须融入每个提示词）
 
@@ -617,18 +618,48 @@ ${propsJSON}
 
 ## 风格要求：${style}
 
-## 输出要求
-以 JSON 数组格式返回（只返回 JSON，不要其他文字）：
-[
-  {
-    "scene": "场景名称（中文）",
-    "elements": "关键元素概括（中文）",
-    "prompt": "完整的绘图提示词（中文，融入摄影专业知识，100-150字左右，详细描述构图、光线、色彩、镜头、氛围）"
-  }
-]
+## 你的任务
 
-每个场景生成一个提示词，场景数量与上面提供的场景数量一致。
-要求：提示词必须包含摄影专业知识，让生成的图片具有专业摄影水准。`;
+你需要生成两类提示词：
+
+### 第一类：场景提示词（每个场景一个）
+- 只描述环境、空间、光线、氛围
+- **禁止出现人物**
+- 突出场景的空间感和氛围感
+- 包含完整的摄影专业知识
+
+### 第二类：人物提示词（每个人物两个）
+1. **三视图**：该人物的正面、侧面、背面三视图
+   - 纯色/渐变背景（白色或灰色）
+   - 人物居中，清晰展示服装和体型
+   - 角色设计图风格
+   - 适合用于角色设定和概念设计
+2. **大头照**：该人物的面部特写人像
+   - 专业人像布光（蝴蝶光或伦勃朗光）
+   - 焦点在面部，虚化背景
+   - 突出五官特征和表情
+
+## 输出要求
+以 JSON 格式返回（只返回 JSON，不要其他文字）：
+{
+  "scenes": [
+    {
+      "scene": "场景名称",
+      "elements": "关键环境要素概括（中文）",
+      "prompt": "场景绘图提示词（中文，不含人物，包含摄影专业知识，100字左右）"
+    }
+  ],
+  "characters": [
+    {
+      "name": "人物名称",
+      "desc": "人物特征描述",
+      "three_view": "三视图提示词（中文，包含正面/侧面/背面展示、服装细节、角色设计风格）",
+      "portrait": "大头照提示词（中文，面部特写、人像布光、镜头焦段、表情）"
+    }
+  ]
+}
+
+场景数量与上面提供的场景数量一致，人物数量与上面提供的人物数量一致。`;
 
   try {
     const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -639,7 +670,7 @@ ${propsJSON}
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `请根据上面的剧本分析结果，按「${style}」风格生成所有场景的绘图提示词，务必融入专业摄影知识。` }],
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `请根据上面的剧本分析结果，按「${style}」风格生成提示词。注意：场景提示词中不能出现人物，人物单独生成三视图和大头照。务必融入专业摄影知识。` }],
         temperature: 0.6,
         max_tokens: 4096
       })
@@ -649,38 +680,78 @@ ${propsJSON}
     const data = await res.json();
     const reply = data.choices[0].message.content;
 
-    let prompts;
+    let result;
     try {
-      prompts = JSON.parse(reply);
+      result = JSON.parse(reply);
     } catch {
       const m = reply.match(/```(?:json)?\s*([\s\S]*?)```/);
-      prompts = m ? JSON.parse(m[1]) : [{ scene: '完整提示词', elements: '', prompt: reply }];
+      result = m ? JSON.parse(m[1]) : { scenes: [{ scene: '完整提示词', elements: '', prompt: reply }], characters: [] };
     }
 
-    if (!Array.isArray(prompts)) prompts = [prompts];
-    state.results = prompts;
-    renderResults(prompts);
+    state.results = result;
+    renderResults(result);
   } catch (err) {
     container.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444">生成失败：${err.message}</div>`;
   }
 }
 
-function renderResults(prompts) {
+function renderResults(result) {
   const container = document.getElementById('resultsContainer');
-  container.innerHTML = `<div style="margin-bottom:12px;font-size:14px;color:var(--text-secondary)">共 ${prompts.length} 个提示词</div>`;
+  const scenes = result.scenes || [];
+  const characters = result.characters || [];
+  const total = scenes.length + (characters.length * 2);
+  container.innerHTML = `<div style="margin-bottom:12px;font-size:14px;color:var(--text-secondary)">共 ${scenes.length} 个场景 + ${characters.length} 个人物</div>`;
 
-  prompts.forEach((p, i) => {
-    const card = document.createElement('div');
-    card.className = 'prompt-card';
-    card.innerHTML = `
-      <div class="scene-title">🎬 ${escapeHtml(p.scene || '场景 ' + (i+1))}</div>
-      ${p.elements ? `<div class="elements">📌 ${escapeHtml(p.elements)}</div>` : ''}
-      <div class="prompt-text">${escapeHtml(p.prompt)}</div>
-      <button class="copy-btn" data-text="${escapeHtml(p.prompt)}">📋 复制</button>
-    `;
-    container.appendChild(card);
-  });
+  // ---- Scenes Section ----
+  if (scenes.length > 0) {
+    const section = document.createElement('div');
+    section.style.marginBottom = '24px';
+    section.innerHTML = `<h3 style="font-size:16px;margin-bottom:12px;">🎬 场景提示词</h3>`;
+    scenes.forEach((p, i) => {
+      const card = document.createElement('div');
+      card.className = 'prompt-card';
+      card.innerHTML = `
+        <div class="scene-title">🎬 ${escapeHtml(p.scene || '场景 ' + (i+1))}</div>
+        ${p.elements ? `<div class="elements">📌 ${escapeHtml(p.elements)}</div>` : ''}
+        <div class="prompt-text">${escapeHtml(p.prompt)}</div>
+        <button class="copy-btn" data-text="${escapeHtml(p.prompt)}">📋 复制</button>
+      `;
+      section.appendChild(card);
+    });
+    container.appendChild(section);
+  }
 
+  // ---- Characters Section ----
+  if (characters.length > 0) {
+    const section = document.createElement('div');
+    section.innerHTML = `<h3 style="font-size:16px;margin-bottom:12px;">👤 人物提示词</h3>`;
+    characters.forEach((ch, i) => {
+      const card = document.createElement('div');
+      card.className = 'prompt-card';
+      let html = `<div class="scene-title">👤 ${escapeHtml(ch.name || '人物 ' + (i+1))}</div>`;
+      if (ch.desc) html += `<div class="elements">📌 ${escapeHtml(ch.desc)}</div>`;
+
+      // Three-view
+      if (ch.three_view) {
+        html += `<div style="font-size:12px;color:var(--primary-light);margin:8px 0 4px;">📐 三视图</div>`;
+        html += `<div class="prompt-text">${escapeHtml(ch.three_view)}</div>`;
+        html += `<button class="copy-btn" data-text="${escapeHtml(ch.three_view)}" style="margin-right:8px">📋 复制三视图</button>`;
+      }
+
+      // Portrait
+      if (ch.portrait) {
+        html += `<div style="font-size:12px;color:var(--primary-light);margin:12px 0 4px;">📸 大头照</div>`;
+        html += `<div class="prompt-text">${escapeHtml(ch.portrait)}</div>`;
+        html += `<button class="copy-btn" data-text="${escapeHtml(ch.portrait)}">📋 复制大头照</button>`;
+      }
+
+      card.innerHTML = html;
+      section.appendChild(card);
+    });
+    container.appendChild(section);
+  }
+
+  // Copy buttons
   container.querySelectorAll('.copy-btn').forEach(btn => {
     btn.onclick = async () => {
       try {
