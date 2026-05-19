@@ -209,6 +209,7 @@
 <div id="app">
   <header>
     <h1>🎬 影视场景 Prompt 生成器</h1>
+    <button id="sessionBtn" title="历史记录">📁</button>
     <button id="settingsBtn">⚙️</button>
   </header>
 
@@ -270,7 +271,7 @@
       </div>
       <div class="btn-row" id="navBtns" style="display:none">
         <button class="btn-secondary" id="prevBtn" style="display:none">← 上一个</button>
-        <button class="btn-secondary" onclick="goStep(2)">📋 清单</button>
+        <button class="btn-secondary" onclick="backToStep2()">📋 清单</button>
         <button class="btn-primary" id="nextSceneBtn">下一个场景 →</button>
       </div>
     </div>  <!-- /step-content 3 -->
@@ -399,10 +400,29 @@
   </div>
 </div>
 
+<!-- Session History Modal -->
+<div class="modal" id="sessionModal">
+  <div class="modal-content" style="max-height:80vh;display:flex;flex-direction:column">
+    <h2>📁 历史记录</h2>
+    <div id="sessionList" style="flex:1;overflow-y:auto;margin:0 -8px 16px;padding:0 8px;min-height:100px">
+      <div class="empty-state" style="padding:20px" id="sessionEmpty">暂无保存记录</div>
+    </div>
+    <p style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;text-align:center">
+      每次提取场景或生成 Prompt 后自动保存
+    </p>
+    <div style="display:flex;gap:8px">
+      <button class="btn-modal" onclick="document.getElementById('sessionModal').classList.remove('open')" style="flex:2">关闭</button>
+      <button class="btn-modal" id="clearAllSessionsBtn" style="flex:1;background:var(--danger);color:#fff">清空全部</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 // ===== State =====
+console.log('🎬 promptgen v3 loaded');
+
 const S = {
   script: '',
   scenes: [],
@@ -417,7 +437,8 @@ const S = {
   charTotal: 0,
   charGenerated: [],
   phase: 'scene', // 'scene' | 'character'
-  format: 'midjourney'
+  format: 'midjourney',
+  consistencyGuide: ''
 };
 
 // ===== Init =====
@@ -431,6 +452,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('settingsBtn').onclick = openSettings;
   document.getElementById('settingsModal').onclick = (e) => { if (e.target === e.currentTarget) closeSettings(); };
   document.getElementById('editModal').onclick = (e) => { if (e.target === e.currentTarget) document.getElementById('editModal').classList.remove('open'); };
+  document.getElementById('sessionBtn').onclick = () => { renderSessionList(); document.getElementById('sessionModal').classList.add('open'); };
+  document.getElementById('sessionModal').onclick = (e) => { if (e.target === e.currentTarget) document.getElementById('sessionModal').classList.remove('open'); };
+  document.getElementById('clearAllSessionsBtn').onclick = clearAllSessions;
   document.getElementById('extractBtn').onclick = extractScenes;
   document.getElementById('confirmBtn').onclick = startGeneration;
   document.getElementById('genPromptBtn').onclick = () => {
@@ -506,6 +530,12 @@ function goStep(n) {
     el.classList.toggle('active', parseInt(el.dataset.step) === n);
   });
   document.querySelector('main').scrollTop = 0;
+}
+
+function backToStep2() {
+  autoSavePromptBeforeNav();
+  saveCurrentSession();
+  goStep(2);
 }
 
 // ===== Phase 1: Extract Scene List =====
@@ -655,6 +685,7 @@ async function extractScenes() {
 
     renderSceneList();
     goStep(2);
+    saveCurrentSession();
   } catch (err) {
     toast('提取失败：' + err.message);
   } finally {
@@ -841,6 +872,7 @@ function saveEdit() {
 
   document.getElementById('editModal').classList.remove('open');
   renderSceneList();
+  saveCurrentSession();
   toast('已保存');
 }
 
@@ -849,6 +881,7 @@ function deleteScene(idx) {
   S.scenes.splice(idx, 1);
   S.totalScenes = S.scenes.length;
   renderSceneList();
+  saveCurrentSession();
   toast('场景已删除');
 }
 
@@ -856,6 +889,7 @@ function deleteCharacter(idx) {
   S.characters.splice(idx, 1);
   S.charTotal = S.characters.length;
   renderSceneList();
+  saveCurrentSession();
   toast('角色已删除');
 }
 
@@ -866,12 +900,20 @@ function startGeneration() {
   S.charCurrentIdx = 0;
   S.charGenerated = [];
   S.phase = 'scene';
+  S.consistencyGuide = '';
   goStep(3);
-  if (S.totalScenes > 0) {
-    showCurrentScene();
-  } else if (S.charTotal > 0) {
-    switchToCharacterPhase();
-  }
+
+  // Generate visual consistency guide, then show first scene
+  document.getElementById('currentSceneCard').innerHTML =
+    '<div class="loading"><div class="spinner"></div><p>正在分析场景间视觉一致性...</p></div>';
+
+  generateConsistencyGuide().then(() => {
+    if (S.totalScenes > 0) {
+      showCurrentScene();
+    } else if (S.charTotal > 0) {
+      switchToCharacterPhase();
+    }
+  });
 }
 
 function showCurrentScene() {
@@ -890,7 +932,24 @@ function showCurrentScene() {
   const pct = ((idx) / S.totalScenes) * 100;
   document.getElementById('progressFill').style.width = pct + '%';
 
-  // Scene card with edit button
+  // Scene navigation strip — clickable chips to jump to any scene
+  let navStrip = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">';
+  S.scenes.forEach((s, i) => {
+    const isCurrent = i === S.currentIdx;
+    const isGen = !!S.generated[i];
+    let chipStyle = 'width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.1s;';
+    if (isCurrent) {
+      chipStyle += 'background:var(--primary);color:#fff;';
+    } else if (isGen) {
+      chipStyle += 'background:var(--success);color:#fff;';
+    } else {
+      chipStyle += 'background:var(--card);color:var(--text-secondary);border:1px solid var(--border);';
+    }
+    navStrip += '<div onclick="jumpToScene(' + i + ')" style="' + chipStyle + '" title="场次' + s.id + '：' + esc(s.name) + '">' + (i + 1) + '</div>';
+  });
+  navStrip += '</div>';
+
+  // Scene card with edit button + nav strip
   document.getElementById('currentSceneCard').innerHTML =
     '<div class="scene-card">' +
     '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
@@ -904,6 +963,7 @@ function showCurrentScene() {
     '</div>' +
     '<div style="font-size:12px;color:var(--text-secondary)">' + esc(sc.visual || '') + '</div>' +
     '</div>' +
+    navStrip +
     '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">场景 ' + (idx+1) + ' / ' + S.totalScenes + '</div>';
 
   // Reset result area
@@ -937,7 +997,24 @@ function showCurrentCharacter() {
   const pct = (doneItems / totalItems) * 100;
   document.getElementById('progressFill').style.width = pct + '%';
 
-  // Character card with edit button
+  // Character navigation strip
+  let navStrip = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">';
+  S.characters.forEach((c, i) => {
+    const isCurrent = i === S.charCurrentIdx;
+    const isGen = !!S.charGenerated[i];
+    let chipStyle = 'height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;cursor:pointer;padding:0 12px;transition:transform 0.1s;';
+    if (isCurrent) {
+      chipStyle += 'background:var(--success);color:#fff;';
+    } else if (isGen) {
+      chipStyle += 'background:var(--success);color:#fff;opacity:0.6;';
+    } else {
+      chipStyle += 'background:var(--card);color:var(--text-secondary);border:1px solid var(--border);';
+    }
+    navStrip += '<div onclick="jumpToCharacter(' + i + ')" style="' + chipStyle + '" title="' + esc(c.name) + '">👤 ' + esc(c.name) + '</div>';
+  });
+  navStrip += '</div>';
+
+  // Character card with edit button + nav strip
   document.getElementById('currentSceneCard').innerHTML =
     '<div class="scene-card" style="border-color:var(--success)">' +
     '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
@@ -954,6 +1031,7 @@ function showCurrentCharacter() {
     '<span>服装：' + esc(ch.clothing || '-') + '</span></div>' +
     (ch.features ? '<div style="font-size:12px;color:var(--warning)">★ ' + esc(ch.features) + '</div>' : '') +
     '</div>' +
+    navStrip +
     '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">角色 ' + (idx+1) + ' / ' + S.charTotal + '（三视图+大头照）</div>';
 
   // Reset result area
@@ -1203,7 +1281,7 @@ ${S.toneDirective ? '剧本整体定调：' + S.toneDirective : ''}
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
-          { role: 'system', content: GEN_PROMPT_PREFIX + toneSection + styleInfo },
+          { role: 'system', content: GEN_PROMPT_PREFIX + toneSection + styleInfo + (S.consistencyGuide ? '\n\n## 场景视觉一致性指南\n' + S.consistencyGuide : '') },
           { role: 'user', content: userMsg }
         ],
         temperature: 0.3, max_tokens: 2048
@@ -1216,6 +1294,7 @@ ${S.toneDirective ? '剧本整体定调：' + S.toneDirective : ''}
     S.generated[idx] = prompt;
     S.scenes[idx].previousPrompt = prompt;
     showGeneratedPrompt(idx);
+    saveCurrentSession();
 
     toast('Prompt 已生成！');
   } catch (err) {
@@ -1246,6 +1325,7 @@ function resetPromptArea() {
   document.getElementById('copyPromptBtn').textContent = '📋 复制 Prompt';
   document.getElementById('regenBtn').style.display = 'none';
   document.getElementById('updatePromptBtn').style.display = 'none';
+  document.getElementById('genPromptBtn').style.display = '';
   resetGenBtnText();
   document.getElementById('navBtns').style.display = 'none';
 }
@@ -1269,18 +1349,37 @@ function saveEditedPrompt() {
   }
   toast('修改已保存');
   document.getElementById('updatePromptBtn').style.display = 'none';
+  saveCurrentSession();
+}
+
+// Auto-save the current textarea content before navigating away
+function autoSavePromptBeforeNav() {
+  const val = document.getElementById('promptResult').value.trim();
+  if (!val) return;
+  if (S.phase === 'character') {
+    if (S.charGenerated[S.charCurrentIdx] !== val) {
+      S.charGenerated[S.charCurrentIdx] = val;
+      saveCurrentSession();
+    }
+  } else {
+    if (S.generated[S.currentIdx] !== val) {
+      S.generated[S.currentIdx] = val;
+      saveCurrentSession();
+    }
+  }
 }
 
 function nextScene() {
+  autoSavePromptBeforeNav();
   if (S.phase === 'character') {
     if (S.charCurrentIdx < S.charTotal - 1) {
       S.charCurrentIdx++;
       showCurrentCharacter();
-      document.getElementById('genPromptBtn').textContent = '👤 生成此角色 Prompt';
-      document.getElementById('genPromptBtn').style.display = '';
-      document.getElementById('navBtns').style.display = 'none';
-      document.getElementById('promptResult').classList.remove('show');
-      document.getElementById('copyPromptBtn').classList.remove('show');
+      // Only override display if not already generated
+      if (!S.charGenerated[S.charCurrentIdx]) {
+        document.getElementById('genPromptBtn').style.display = '';
+        document.getElementById('navBtns').style.display = 'none';
+      }
     } else {
       toast('🎉 全部角色 Prompt 已生成完成！');
     }
@@ -1290,23 +1389,25 @@ function nextScene() {
   if (S.currentIdx < S.totalScenes - 1) {
     S.currentIdx++;
     showCurrentScene();
-    document.getElementById('genPromptBtn').style.display = '';
-    document.getElementById('navBtns').style.display = 'none';
-    document.getElementById('promptResult').classList.remove('show');
-    document.getElementById('copyPromptBtn').classList.remove('show');
+    // Only override display if not already generated
+    if (!S.generated[S.currentIdx]) {
+      document.getElementById('genPromptBtn').style.display = '';
+      document.getElementById('navBtns').style.display = 'none';
+    }
   } else if (S.charTotal > 0) {
     // Transition to character phase
     switchToCharacterPhase();
-    document.getElementById('genPromptBtn').style.display = '';
-    document.getElementById('navBtns').style.display = 'none';
-    document.getElementById('promptResult').classList.remove('show');
-    document.getElementById('copyPromptBtn').classList.remove('show');
+    if (!S.charGenerated[0]) {
+      document.getElementById('genPromptBtn').style.display = '';
+      document.getElementById('navBtns').style.display = 'none';
+    }
   } else {
     toast('🎉 全部场景 Prompt 已生成完成！');
   }
 }
 
 function prevScene() {
+  autoSavePromptBeforeNav();
   if (S.phase === 'character') {
     if (S.charCurrentIdx > 0) {
       S.charCurrentIdx--;
@@ -1324,6 +1425,20 @@ function prevScene() {
   }
 }
 
+function jumpToScene(idx) {
+  if (idx < 0 || idx >= S.totalScenes) return;
+  autoSavePromptBeforeNav();
+  S.currentIdx = idx;
+  showCurrentScene();
+}
+
+function jumpToCharacter(idx) {
+  if (idx < 0 || idx >= S.charTotal) return;
+  autoSavePromptBeforeNav();
+  S.charCurrentIdx = idx;
+  showCurrentCharacter();
+}
+
 function regeneratePrompt() {
   if (S.phase === 'character') {
     if (!S.charGenerated[S.charCurrentIdx]) { toast('还没有生成的 Prompt'); return; }
@@ -1334,6 +1449,7 @@ function regeneratePrompt() {
   }
   document.getElementById('regenBtn').style.display = 'none';
   resetPromptArea();
+  saveCurrentSession();
   toast('已清除，可以重新生成');
 }
 
@@ -1401,6 +1517,78 @@ const CHARACTER_PROMPT = `你是专业的影视角色概念设计师、AI 角色
 ## 风格关键词参考
 竖版9:16或方图1:1，超写实真人影视角色定妆照，棚拍中性灰背景，柔光箱均匀布光，真人皮肤毛孔级细节，自然发丝，真实眼神光，85mm定焦人像镜头，专业电影级角色定妆照，8K超高清，RAW格式输出质感，真实演员选角照片风格`;
 
+// ===== Visual Consistency Guide =====
+const CONSISTENCY_PROMPT = `你是专业的影视美术指导。你的任务是基于完整的场景清单和整体美术风格，制定一份"场景视觉一致性指南"，确保最终生成的各个场景 Prompt 视觉风格高度统一。
+
+## 任务
+保证多张场景画面看起来属于同一部影视作品，不能出现场景之间视觉语言断裂。
+
+## 你需要分析的内容
+1. 整体美术风格设定（主风格、时代地域、类型气质、色彩基调、光影方向）
+2. 剧本定调方向
+3. 所有场景清单（了解哪些场景需要在视觉上衔接）
+
+## 一致性指南应包含
+
+### 1. 色彩体系
+统一的色彩基调规则：整体色彩倾向、阴影色温、高光色温、有无统一的色调滤镜效果。
+
+### 2. 光影体系
+主光方向偏好、补光方式、阴影处理风格（硬朗/柔和）、环境光氛围处理原则。
+
+### 3. 镜头语言
+统一的构图偏好（情景交融/压迫式构图/上帝视角）、镜头焦段偏好、景深处理风格。
+
+### 4. 材质与表面处理
+相同类型材质的呈现方式应该一致——所有金属表面都为旧化质感、所有木材都有自然纹理、所有混凝土有气泡孔洞等。
+
+### 5. 贯穿性环境元素
+贯穿全剧的环境要素（始终下雨、持续雾霾、特定季节特征）在不同场景中的一致呈现方式。
+
+### 6. 空气透视与大气处理
+远景处理方式、雾/烟/尘/霾的处理统一原则。
+
+## 输出要求
+输出一段简洁精炼的英文视觉一致性指南（约 100-200 词），直接嵌入到 AI 图像生成场景 Prompt 的指令中。不要输出标题和说明，直接输出指南内容。`;
+
+async function generateConsistencyGuide() {
+  const apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) { S.consistencyGuide = ''; return; }
+
+  const sceneSummary = S.scenes.map((s, i) =>
+    '场次' + s.id + '：' + s.name + '（' + (s.time || '-') + '，' + (s.location || '-') + '，' + (s.state || '基础') + '）'
+  ).join('\n');
+
+  const charSummary = S.characters.length > 0
+    ? '\n角色：' + S.characters.map(c => c.name).join('、')
+    : '';
+
+  const styleInfo = S.artStyle
+    ? '主风格：' + (S.artStyle.main || '电影级超写实') + '\n时代/地域：' + (S.artStyle.era || '-') + '\n类型气质：' + (S.artStyle.mood || '-') + '\n色彩基调：' + (S.artStyle.color || '-') + '\n光影方向：' + (S.artStyle.light || '-')
+    : '主风格：电影级超写实';
+
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: CONSISTENCY_PROMPT },
+          { role: 'user', content: '整体美术风格：\n' + styleInfo + '\n\n场景清单：\n' + sceneSummary + charSummary + (S.toneDirective ? '\n\n剧本定调：' + S.toneDirective : '') }
+        ],
+        temperature: 0.3, max_tokens: 1024
+      })
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    S.consistencyGuide = data.choices[0].message.content.trim();
+  } catch (err) {
+    console.warn('一致性指南生成失败，将继续：' + err.message);
+    S.consistencyGuide = '';
+  }
+}
+
 async function generateCharacterPrompt() {
   const idx = S.charCurrentIdx;
   if (S.charGenerated[idx]) {
@@ -1452,6 +1640,7 @@ ${genderGuide}
 
     S.charGenerated[idx] = prompt;
     showGeneratedCharPrompt(idx);
+    saveCurrentSession();
     toast('角色 Prompt 已生成！');
   } catch (err) {
     toast('生成失败：' + err.message);
@@ -1543,6 +1732,127 @@ function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ===== Session Management (localStorage) =====
+const SES_KEY = 'promptgen_sessions';
+
+function getSessions() {
+  try { return JSON.parse(localStorage.getItem(SES_KEY) || '[]'); } catch { return []; }
+}
+
+function saveCurrentSession() {
+  const sessions = getSessions();
+  const script = S.script;
+  if (!script) return;
+
+  // Find existing session for same script, or create new
+  const idx = sessions.findIndex(s => s.script === script);
+  const session = {
+    id: idx >= 0 ? sessions[idx].id : Date.now(),
+    date: new Date().toLocaleString('zh-CN'),
+    script: S.script,
+    toneDirective: S.toneDirective,
+    scenes: S.scenes,
+    characters: S.characters,
+    artStyle: S.artStyle,
+    notes: S.notes,
+    generated: S.generated,
+    charGenerated: S.charGenerated,
+    consistencyGuide: S.consistencyGuide
+  };
+
+  if (idx >= 0) {
+    sessions[idx] = session;
+  } else {
+    sessions.unshift(session);
+  }
+
+  // Keep max 15 sessions (~5MB localStorage limit)
+  while (sessions.length > 15) sessions.pop();
+  localStorage.setItem(SES_KEY, JSON.stringify(sessions));
+}
+
+function restoreSession(id) {
+  const sessions = getSessions();
+  const session = sessions.find(s => s.id === id);
+  if (!session) { toast('记录未找到'); return; }
+
+  // Restore state
+  S.script = session.script;
+  S.toneDirective = session.toneDirective || '';
+  S.scenes = session.scenes || [];
+  S.characters = session.characters || [];
+  S.artStyle = session.artStyle || null;
+  S.notes = session.notes || '';
+  S.generated = session.generated || [];
+  S.charGenerated = session.charGenerated || [];
+  S.consistencyGuide = session.consistencyGuide || '';
+  S.totalScenes = S.scenes.length;
+  S.charTotal = S.characters.length;
+  S.phase = 'scene';
+  S.currentIdx = 0;
+  S.charCurrentIdx = 0;
+
+  document.getElementById('sessionModal').classList.remove('open');
+
+  const hasGenerated = S.generated.some(g => g) || S.charGenerated.some(g => g);
+
+  if (hasGenerated) {
+    // Go to step 3 and show first scene
+    goStep(3);
+    document.getElementById('genPromptBtn').style.display = 'none';
+    document.getElementById('navBtns').style.display = 'flex';
+    if (S.totalScenes > 0) showCurrentScene();
+    else if (S.charTotal > 0) switchToCharacterPhase();
+  } else {
+    renderSceneList();
+    goStep(2);
+  }
+
+  toast('已恢复：' + session.date);
+}
+
+function deleteSession(id) {
+  let sessions = getSessions();
+  sessions = sessions.filter(s => s.id !== id);
+  localStorage.setItem(SES_KEY, JSON.stringify(sessions));
+  renderSessionList();
+}
+
+function clearAllSessions() {
+  if (!confirm('确定清空所有历史记录？')) return;
+  localStorage.removeItem(SES_KEY);
+  renderSessionList();
+  toast('已清空');
+}
+
+function renderSessionList() {
+  const list = document.getElementById('sessionList');
+  const sessions = getSessions();
+
+  if (sessions.length === 0) {
+    list.innerHTML = '<div class="empty-state" style="padding:20px">暂无保存记录</div>';
+    return;
+  }
+
+  list.innerHTML = sessions.map(s => {
+    const genCount = (s.generated || []).filter(g => g).length;
+    const charGenCount = (s.charGenerated || []).filter(g => g).length;
+    const totalGen = genCount + charGenCount;
+    const preview = (s.script || '').replace(/\n/g, ' ').slice(0, 60);
+    return '<div onclick="restoreSession(' + s.id + ')" style="background:var(--surface);border-radius:var(--radius);padding:14px;box-shadow:0 1px 3px var(--shadow);cursor:pointer;margin-bottom:8px;position:relative">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+      '<div style="font-weight:600;font-size:13px;color:var(--text)">' + (s.date || '') + '</div>' +
+      '<button class="tbl-btn" onclick="event.stopPropagation();deleteSession(' + s.id + ')" title="删除">🗑️</button>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + esc(preview) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-secondary);margin-top:6px">🎬 ' + (s.scenes || []).length + ' 个场景' +
+      ((s.characters || []).length ? ' 👤 ' + s.characters.length + ' 个角色' : '') +
+      (totalGen ? ' ✅ ' + totalGen + ' 个已生成' : '') +
+      '</div>' +
+      '</div>';
+  }).join('');
 }
 </script>
 </body>
