@@ -270,6 +270,12 @@
           <button class="btn-secondary" id="updatePromptBtn" style="flex:1;display:none" onclick="saveEditedPrompt()">💾 保存修改</button>
         </div>
       </div>
+      <!-- Multi-angle shots -->
+      <div id="multiAngleSection" style="display:none;margin-top:16px">
+        <div style="font-size:13px;font-weight:600;color:var(--primary-light);margin-bottom:8px">📸 多视角镜头 — 场景不变，切换机位</div>
+        <div id="angleBtnRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+        <div id="angleShotsList"></div>
+      </div>
       <div class="btn-row" id="navBtns" style="display:none">
         <button class="btn-secondary" id="prevBtn" style="display:none">← 上一个</button>
         <button class="btn-secondary" onclick="backToStep2()">📋 清单</button>
@@ -439,7 +445,8 @@ const S = {
   charGenerated: [],
   phase: 'scene', // 'scene' | 'character'
   format: 'midjourney',
-  consistencyGuide: ''
+  consistencyGuide: '',
+  angleShots: {} // sceneIdx -> [{label, prompt}]
 };
 
 // ===== Init =====
@@ -902,6 +909,7 @@ function startGeneration() {
   S.generated = [];
   S.charCurrentIdx = 0;
   S.charGenerated = [];
+  S.angleShots = {};
   S.phase = 'scene';
   S.consistencyGuide = '';
   goStep(3);
@@ -987,6 +995,7 @@ function showCurrentScene() {
     document.getElementById('prevBtn').style.display = idx > 0 ? '' : 'none';
     document.getElementById('nextSceneBtn').textContent =
       idx < S.totalScenes - 1 ? '下一个场景 →' : (S.charTotal > 0 ? '→ 生成角色 Prompt' : '✅ 全部完成');
+    showAngleSection();
   }
 
   document.querySelector('main').scrollTop = 0;
@@ -1416,6 +1425,7 @@ function showGeneratedPrompt(idx) {
   document.getElementById('prevBtn').style.display = idx > 0 ? '' : 'none';
   const isLast = idx >= S.totalScenes - 1;
   document.getElementById('nextSceneBtn').textContent = isLast ? '✅ 全部完成' : '下一个场景 →';
+  showAngleSection();
 }
 
 function resetPromptArea() {
@@ -1429,6 +1439,7 @@ function resetPromptArea() {
   document.getElementById('genPromptBtn').style.display = '';
   resetGenBtnText();
   document.getElementById('navBtns').style.display = 'none';
+  hideAngleSection();
 }
 
 function resetGenBtnText() {
@@ -1547,6 +1558,7 @@ function regeneratePrompt() {
   } else {
     if (!S.generated[S.currentIdx]) { toast('还没有生成的 Prompt'); return; }
     S.generated[S.currentIdx] = '';
+    S.angleShots[S.currentIdx] = [];
   }
   document.getElementById('regenBtn').style.display = 'none';
   resetPromptArea();
@@ -1571,6 +1583,103 @@ function copyPrompt() {
     ta.select(); document.execCommand('copy'); ta.remove();
     toast('已复制');
   });
+}
+
+// ===== Multi-Angle Shot Generation =====
+function renderAngleButtons() {
+  const idx = S.currentIdx;
+  const container = document.getElementById('angleBtnRow');
+  container.innerHTML = ANGLE_PRESETS.map(a =>
+    '<button class="btn-secondary" onclick="generateMultiAngle(\'' + a.id + '\',this)" style="font-size:12px;padding:6px 10px;flex:none">' + a.label + '</button>'
+  ).join('');
+}
+
+async function generateMultiAngle(angleId, btnEl) {
+  const idx = S.currentIdx;
+  const basePrompt = S.generated[idx];
+  if (!basePrompt) { toast('请先生成场景 Prompt'); return; }
+
+  // Find the Chinese label
+  const preset = ANGLE_PRESETS.find(a => a.id === angleId);
+  const label = preset ? preset.label : angleId;
+
+  const apiKey = localStorage.getItem('deepseek_api_key');
+  if (!apiKey) { toast('请先设置 API Key'); return; }
+
+  // Show loading state
+  const btn = btnEl;
+  btn.disabled = true; btn.textContent = '生成中...';
+
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'deepseek-v4-flash',
+        extra_body: { thinking: { type: 'disabled' } },
+        messages: [
+          { role: 'system', content: ANGLE_VARIANT_PROMPT },
+          { role: 'user', content: '## 原始场景 Prompt\n' + basePrompt + '\n\n## 要求\n请从「' + label + '」的角度重新描述这个场景。场景本身完全不变，只改变机位和构图。\n\n输出完整的一段中文 Prompt。' }
+        ],
+        temperature: 0.3, max_tokens: 2048
+      })
+    });
+    if (!res.ok) throw new Error('API 错误 (' + res.status + ')');
+    const data = await res.json();
+    const prompt = data.choices[0].message.content.trim();
+
+    // Store
+    if (!S.angleShots[idx]) S.angleShots[idx] = [];
+    S.angleShots[idx].push({ label: label, prompt: prompt });
+    saveCurrentSession();
+
+    renderAngleShots();
+    toast('「' + label + '」已生成！');
+  } catch (err) {
+    toast('生成失败：' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+
+function renderAngleShots() {
+  const idx = S.currentIdx;
+  const shots = S.angleShots[idx] || [];
+  const container = document.getElementById('angleShotsList');
+
+  if (shots.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = shots.map((s, i) =>
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+    '<span style="font-size:12px;font-weight:600;color:var(--primary-light)">📸 ' + esc(s.label) + '</span>' +
+    '<button class="tbl-btn" onclick="copyAngleShot(' + i + ')" title="复制此视角 Prompt" style="font-size:12px">📋 复制</button>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap">' + esc(s.prompt) + '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function copyAngleShot(idx) {
+  const shots = S.angleShots[S.currentIdx];
+  if (!shots || !shots[idx]) return;
+  navigator.clipboard.writeText(shots[idx].prompt).then(() => toast('已复制「' + shots[idx].label + '」')).catch(() => toast('复制失败'));
+}
+
+function showAngleSection() {
+  if (S.phase === 'character') return;
+  const idx = S.currentIdx;
+  if (!S.generated[idx]) return;
+  document.getElementById('multiAngleSection').style.display = '';
+  renderAngleButtons();
+  renderAngleShots();
+}
+
+function hideAngleSection() {
+  document.getElementById('multiAngleSection').style.display = 'none';
 }
 
 // ===== Character Prompt Generation =====
@@ -1617,6 +1726,40 @@ const CHARACTER_PROMPT = `你是专业的影视角色概念设计师、AI 角色
 
 ## 风格关键词参考
 竖版9:16或方图1:1，超写实真人影视角色定妆照，棚拍中性灰背景，柔光箱均匀布光，真人皮肤毛孔级细节，自然发丝，真实眼神光，85mm定焦人像镜头，专业电影级角色定妆照，8K超高清，RAW格式输出质感，真实演员选角照片风格`;
+
+// ===== Multi-Angle Shot Generation =====
+const ANGLE_VARIANT_PROMPT = `你是专业的电影摄影师。你的任务是基于已有的场景 Prompt，仅改变机位/镜头角度，生成一个新的 Prompt。
+
+## 核心规则
+1. **场景本身必须完全不变**：时间、天气、光源位置、材质、道具、空间结构、色彩基调全部保持原样
+2. **只改变**：镜头位置（机位）、拍摄角度、构图方式、以及因视角变化而可见/不可见的局部区域
+3. 新 Prompt 仍是一段完整的中文 Prompt，可直接复制使用
+4. 不要输出标题、说明、分析过程
+
+## 可用的镜头角度
+- 正打（顺光方向拍摄主体正面）
+- 反打（从主体背面/对面方向拍摄，即过肩/对切镜头）
+- 左侧视角（机位移到场景左侧，主体在画面右侧）
+- 右侧视角（机位移到场景右侧，主体在画面左侧）
+- 俯拍视角（高角度俯视全景）
+- 仰拍视角（低角度仰视主体）
+- 远景全貌（后退拉远，展示场景全貌）
+- 局部特写（推近到关键细节）
+
+## 输出格式
+只输出一段完整中文 Prompt。画幅与风格 → 景别与机位说明 → 核心画面 → 时间天气 → 光源 → 前景/中景/远景 → 材质 → 色彩情绪 → 电影质感关键词`;
+
+const ANGLE_PRESETS = [
+  { id: '正面', label: '📹 正面全景' },
+  { id: '正打', label: '🎯 正打A面' },
+  { id: '反打', label: '🎯 反打B面' },
+  { id: '左侧', label: '◀ 左侧视角' },
+  { id: '右侧', label: '▶ 右侧视角' },
+  { id: '俯拍', label: '⬇ 俯拍全景' },
+  { id: '仰拍', label: '⬆ 仰拍视角' },
+  { id: '过肩', label: '👤 过肩镜头' },
+  { id: '特写', label: '🔍 局部特写' },
+];
 
 // ===== Visual Consistency Guide =====
 const CONSISTENCY_PROMPT = `你是专业的影视美术指导。你的任务是基于完整的场景清单和整体美术风格，制定一份"场景视觉一致性指南"，确保最终生成的各个场景 Prompt 视觉风格高度统一。
@@ -1872,6 +2015,7 @@ function saveCurrentSession() {
     notes: S.notes,
     generated: S.generated,
     charGenerated: S.charGenerated,
+    angleShots: S.angleShots,
     consistencyGuide: S.consistencyGuide
   };
 
@@ -1900,6 +2044,7 @@ function restoreSession(id) {
   S.notes = session.notes || '';
   S.generated = session.generated || [];
   S.charGenerated = session.charGenerated || [];
+  S.angleShots = session.angleShots || {};
   S.consistencyGuide = session.consistencyGuide || '';
   S.totalScenes = S.scenes.length;
   S.charTotal = S.characters.length;
